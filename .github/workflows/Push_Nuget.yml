@@ -23,7 +23,6 @@ jobs:
         with:
           dotnet-version: '10.x'
 
-      # 🔥 直接操作 .csproj，不依赖 .slnx
       - name: Restore dependencies
         run: dotnet restore CatalyticKit/CatalyticKit/CatalyticKit.csproj
 
@@ -39,12 +38,15 @@ jobs:
       
       - name: Show package info
         run: |
-          echo "Generated packages:"
+          echo "📦 Generated packages:"
           ls -lh nupkgs/
           
           PACKAGE_FILE=$(ls nupkgs/*.nupkg | head -1)
           VERSION=$(basename "$PACKAGE_FILE" | sed 's/CatalyticKit\.\(.*\)\.nupkg/\1/')
           echo "Version: $VERSION"
+          echo ""
+          echo "📋 Package contents:"
+          unzip -l "$PACKAGE_FILE" | grep '\.dll$'
 
       - name: Upload NuGet Package
         uses: actions/upload-artifact@v4
@@ -55,14 +57,9 @@ jobs:
       - name: Push to NuGet
         if: "!contains(github.ref_name, 'dev')"
         run: |
-          echo "Pushing to NuGet..."
+          echo "🚀 Pushing to NuGet..."
           dotnet nuget push nupkgs/*.nupkg \
             --api-key ${{ secrets.NUGET_API_KEY }} \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
-      
-      - name: Skip NuGet push (dev version)
-        if: "contains(github.ref_name, 'dev')"
-        run: |
-          echo "⚠️  Dev version detected, skipping NuGet push"
-          echo "Package is available in Artifacts for testing"
+          echo "✅ Published to Nu
