@@ -1,0 +1,68 @@
+name: Publish SDK to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'  # 任何 v 开头的 tag
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dependencies
+        run: dotnet restore CatalyticKit/CatalyticKit.sln
+
+      - name: Build Solution
+        run: dotnet build CatalyticKit/CatalyticKit.sln -c Release --no-restore
+
+      - name: Pack SDK
+        run: |
+          dotnet pack CatalyticKit/CatalyticKit/CatalyticKit.csproj \
+            -c Release \
+            -o nupkgs \
+            --no-build
+      
+      - name: Show package info
+        run: |
+          echo "Generated packages:"
+          ls -lh nupkgs/
+          
+          PACKAGE_FILE=$(ls nupkgs/*.nupkg | head -1)
+          VERSION=$(basename "$PACKAGE_FILE" | sed 's/CatalyticKit\.\(.*\)\.nupkg/\1/')
+          echo "Version: $VERSION"
+
+      - name: Upload NuGet Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: nupkgs/*.nupkg
+
+      # 🔥 只有正式版（不含 dev）才推送到 NuGet
+      - name: Push to NuGet
+        if: "!contains(github.ref_name, 'dev')"
+        run: |
+          echo "Pushing to NuGet..."
+          dotnet nuget push nupkgs/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+      
+      - name: Skip NuGet push (dev version)
+        if: "contains(github.ref_name, 'dev')"
+        run: |
+          echo "⚠️  Dev version detected, skipping NuGet push"
+          echo "Package is available in Artifacts for testing"

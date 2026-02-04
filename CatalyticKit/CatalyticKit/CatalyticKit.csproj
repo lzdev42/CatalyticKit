@@ -4,6 +4,19 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- NuGet 包信息 -->
+    <PackageId>CatalyticKit</PackageId>
+    <Authors>lzdev42</Authors>
+    <Description>SDK for Catalytic automation testing platform</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MinVer 自动版本管理 -->
+    <PackageReference Include="MinVer" Version="7.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 
 </Project>
