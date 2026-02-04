@@ -3,7 +3,7 @@ name: Publish SDK to NuGet
 on:
   push:
     tags:
-      - 'v*'  # 任何 v 开头的 tag
+      - 'v*'
 
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -23,11 +23,12 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      # 🔥 直接操作 .csproj，不依赖 .slnx
       - name: Restore dependencies
-        run: dotnet restore CatalyticKit/CatalyticKit.sln
+        run: dotnet restore CatalyticKit/CatalyticKit/CatalyticKit.csproj
 
-      - name: Build Solution
-        run: dotnet build CatalyticKit/CatalyticKit.sln -c Release --no-restore
+      - name: Build SDK
+        run: dotnet build CatalyticKit/CatalyticKit/CatalyticKit.csproj -c Release --no-restore
 
       - name: Pack SDK
         run: |
@@ -51,7 +52,6 @@ jobs:
           name: nuget-package
           path: nupkgs/*.nupkg
 
-      # 🔥 只有正式版（不含 dev）才推送到 NuGet
       - name: Push to NuGet
         if: "!contains(github.ref_name, 'dev')"
         run: |
