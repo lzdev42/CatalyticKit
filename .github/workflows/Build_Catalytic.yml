@@ -4,8 +4,8 @@ on:
   # 手动触发
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Catalytic tag to build (e.g., v1.0.0 or v1.0.0-dev.1)'
+      version:
+        description: 'Version to build (e.g., v1.0.0 or v1.0.0-dev.1)'
         required: true
         type: string
   
@@ -17,6 +17,33 @@ env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.jvmargs=-Xmx4g
 
 jobs:
+  # 🔥 新增：检查 tag 是否存在（只用于手动触发）
+  check-tag:
+    name: Check if tag exists
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      ref: ${{ steps.check.outputs.ref }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check if tag exists in Catalytic repo
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.CATALYTIC_PAT }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          
+          # 检查 tag 是否存在
+          if gh api repos/lzdev42/catalytic/git/ref/tags/$VERSION --silent 2>/dev/null; then
+            echo "Tag $VERSION exists, will checkout tag"
+            echo "ref=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $VERSION does not exist, will checkout main branch"
+            echo "ref=main" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
   build:
     strategy:
       fail-fast: false
@@ -54,16 +81,40 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    needs: [check-tag]
+    # 🔥 跳过 check-tag 的条件检查（如果是 repository_dispatch 就不需要 check-tag）
+    if: always() && (github.event_name == 'repository_dispatch' || needs.check-tag.result == 'success')
 
     steps:
-      # 🔥 Checkout Catalytic 仓库（私有仓库）
+      # 🔥 根据触发方式决定 ref 和 version
+      - name: Set build variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "ref=${{ needs.check-tag.outputs.ref }}" >> $GITHUB_OUTPUT
+            echo "version=${{ needs.check-tag.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "ref=${{ github.event.client_payload.tag }}" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.client_payload.tag }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      # 🔥 Checkout Catalytic 仓库
       - name: Checkout Catalytic Repo
         uses: actions/checkout@v6
         with:
           repository: lzdev42/catalytic
           token: ${{ secrets.CATALYTIC_PAT }}
-          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+          ref: ${{ steps.vars.outputs.ref }}
           fetch-depth: 0
+
+      # 🔥 如果是拉取 main，手动创建版本标记
+      - name: Set version for main branch build
+        if: steps.vars.outputs.ref == 'main'
+        run: |
+          echo "Building from main branch with version: ${{ steps.vars.outputs.version }}"
+          # 可以在这里注入版本号到构建脚本，如果需要的话
+        shell: bash
 
       # ============================================================
       # Environment Setup
@@ -143,7 +194,7 @@ jobs:
         if: matrix.platform != 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: catalytic-${{ matrix.platform }}-${{ matrix.arch }}
+          name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             dist/*.dmg
             dist/*.AppImage
@@ -153,7 +204,7 @@ jobs:
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: catalytic-${{ matrix.platform }}-${{ matrix.arch }}
+          name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*.zip
           retention-days: 14
 
@@ -163,33 +214,40 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: build
-    # 🔥 检查 tag 是否包含 'dev'
+    needs: [check-tag, build]
     if: |
-      (github.event_name == 'workflow_dispatch' && !contains(github.event.inputs.tag, 'dev')) ||
-      (github.event_name == 'repository_dispatch' && !contains(github.event.client_payload.tag, 'dev'))
+      always() &&
+      needs.build.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && !contains(needs.check-tag.outputs.version, 'dev')) ||
+        (github.event_name == 'repository_dispatch' && !contains(github.event.client_payload.tag, 'dev'))
+      )
     steps:
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ needs.check-tag.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.event.client_payload.tag }}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
       
-      - name: Get tag name
-        id: get_tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.client_payload.tag }}" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.get_tag.outputs.tag }}
+          tag_name: ${{ steps.version.outputs.version }}
           files: release-artifacts/**/*
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            Built from Catalytic repository
+            Version: ${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
