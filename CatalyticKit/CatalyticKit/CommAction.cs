@@ -21,8 +21,5 @@ public enum CommAction
     Query,
     
     /// <summary>查询连接状态</summary>
-    Status,
-
-    /// <summary>阻塞等待直到如有数据</summary>
-    Wait
+    Status
 }

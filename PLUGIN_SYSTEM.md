@@ -1,5 +1,7 @@
 # Plugin System Design
 
+> SDK Version: 0.1.0 | Updated: 2026-02-05
+
 ## Overview
 
 Catalytic Host uses a plugin-based architecture to support various communication protocols and custom tasks. Plugins are discovered at startup from the `plugins/` directory.
@@ -81,12 +83,27 @@ public interface ICommunicator : IPlugin
 {
     string Protocol { get; }
     
+    // Basic execution
     Task<byte[]> ExecuteAsync(
         string address, 
         string action, 
         byte[] payload, 
         int timeoutMs, 
         CancellationToken ct);
+    
+    // Advanced execution with options
+    Task<byte[]> ExecuteAsync(
+        string address,
+        string action,
+        byte[] payload,
+        ExecuteOptions options,
+        CancellationToken ct);
+}
+
+public class ExecuteOptions
+{
+    public int TimeoutMs { get; set; }
+    public string? Terminator { get; set; }  // e.g. "\n"
 }
 ```
 
@@ -192,8 +209,11 @@ public interface IPluginContext
     /// Get another protocol driver (for inter-plugin communication)
     ICommunicator? GetCommunicator(string protocolOrId);
     
-    /// Push event to Host
+    /// Push event to Host (e.g. device disconnect, async data)
     void PushEvent(string eventType, byte[] data);
+    
+    /// Get buffered device data (for polling mode)
+    byte[] GetDeviceData(string deviceId);
 }
 ```
 
@@ -229,12 +249,3 @@ Yes. Declare both in `capabilities`:
     }
 }
 ```
-
----
-
-## Next Steps
-
-- [ ] Implement `PluginManager` class in Host
-- [ ] Implement `IPluginContext`
-- [ ] Create `Catalytic.Plugin` library (interfaces for plugin developers)
-- [ ] Create sample plugin

@@ -1,6 +1,6 @@
-# Catalytic 插件开发指南 (v4.0)
+# Catalytic 插件开发指南 (v0.1)
 
-*(更新日期: 2026-01-16 | SDK 版本: 4.0.0)*
+*(更新日期: 2026-02-05 | SDK 版本: 0.1.0)*
 
 ---
 
@@ -12,13 +12,11 @@
 4. [核心概念](#4-核心概念)
 5. [SDK API 完整参考](#5-sdk-api-完整参考)
 6. [完整示例：通讯器插件](#6-完整示例通讯器插件)
-7. [完整示例：处理器插件](#7-完整示例处理器插件)
-8. [错误处理最佳实践](#8-错误处理最佳实践)
-9. [高级功能](#9-高级功能)
-10. [调试与排查问题](#10-调试与排查问题)
-11. [部署插件](#11-部署插件)
-12. [日志与流量监控 (重要变更)](#12-日志与流量监控-重要变更)
-13. [常见问题 FAQ](#13-常见问题-faq)
+7. [错误处理最佳实践](#7-错误处理最佳实践)
+8. [高级功能](#8-高级功能)
+9. [调试与排查问题](#9-调试与排查问题)
+10. [部署插件](#10-部署插件)
+11. [常见问题 FAQ](#11-常见问题-faq)
 
 ---
 
@@ -80,7 +78,7 @@ cd MyFirstPlugin
 
 #### 方式 A: 直接引用 DLL（推荐）
 
-将 Catalytic 提供的 `CatalyticKit.dll` 复制到 `lib/` 目录，然后编辑 `.csproj`：
+将 Catalytic 提供的 `CatalyticKit.dll` 复制到项目根目录下的 `lib/` 文件夹（没有就新建一个），然后编辑 `.csproj`：
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -170,6 +168,17 @@ public class DemoPlugin : ICommunicator
         // 这里实现你的通讯逻辑
         // 示例：返回 "Hello" 的字节数组
         return Task.FromResult("Hello from plugin!"u8.ToArray());
+    }
+
+    // 高级版本（必须实现，可以直接调用上面的方法）
+    public Task<byte[]> ExecuteAsync(
+        string address,
+        string action,
+        byte[] payload,
+        ExecuteOptions options,
+        CancellationToken ct)
+    {
+        return ExecuteAsync(address, action, payload, options.TimeoutMs, ct);
     }
 }
 ```
@@ -429,8 +438,18 @@ public interface IPluginContext
     /// 用于设备主动推送数据（如 CAN 帧监控、设备报警）
     /// </summary>
     void PushEvent(string eventType, byte[] data);
+
+    /// <summary>
+    /// 获取设备缓冲的数据（用于 Polling 模式）
+    /// 调用后缓冲区会被清空
+    /// </summary>
+    /// <param name="deviceId">设备地址</param>
+    /// <returns>缓冲的数据，没有则返回空数组</returns>
+    byte[] GetDeviceData(string deviceId);
 }
 ```
+
+> 💡 **小贴士**：`CancellationToken` 是 .NET 的取消机制。当用户点击“停止测试”时，这个 token 会触发取消。在你的代码里应该定期检查 `ct.ThrowIfCancellationRequested()` 或把它传给异步方法（如 `await Task.Delay(1000, ct)`）。
 
 ### 5.6 CommAction（标准动作枚举）
 
@@ -770,185 +789,9 @@ public class SerialCommunicator : ICommunicator
 
 ---
 
-## 7. 完整示例：处理器插件
+## 7. 错误处理最佳实践
 
-这是一个固件烧录处理器示例，演示如何调用其他通讯器。
-
-### FirmwareBurner.cs
-
-```csharp
-using System.Text.Json;
-using CatalyticKit;
-
-namespace Acme.Burner;
-
-/// <summary>
-/// 固件烧录参数
-/// </summary>
-public record BurnParameters
-{
-    /// <summary>烧录文件路径</summary>
-    public string FilePath { get; init; } = "";
-    
-    /// <summary>目标设备地址</summary>
-    public string DeviceAddress { get; init; } = "";
-    
-    /// <summary>使用的通讯器 ID</summary>
-    public string CommunicatorId { get; init; } = "acme.serial";
-    
-    /// <summary>波特率</summary>
-    public int BaudRate { get; init; } = 115200;
-}
-
-/// <summary>
-/// 固件烧录处理器
-/// </summary>
-public class FirmwareBurner : IProcessor
-{
-    private IPluginContext? _context;
-
-    public string Id => "acme.firmware-burner";
-    public string TaskName => "burn_firmware";
-
-    public Task ActivateAsync(IPluginContext context)
-    {
-        _context = context;
-        _context.Log(LogLevel.Info, "固件烧录插件已激活");
-        return Task.CompletedTask;
-    }
-
-    public Task DeactivateAsync()
-    {
-        _context?.Log(LogLevel.Info, "固件烧录插件已停用");
-        return Task.CompletedTask;
-    }
-
-    public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct)
-    {
-        // 第一步：解析参数
-        BurnParameters? parameters;
-        try
-        {
-            parameters = JsonSerializer.Deserialize<BurnParameters>(parametersJson);
-            if (parameters == null)
-            {
-                throw new ArgumentException("参数解析结果为 null");
-            }
-        }
-        catch (JsonException ex)
-        {
-            throw new ArgumentException($"JSON 参数解析失败: {ex.Message}", ex);
-        }
-
-        _context?.Log(LogLevel.Info, $"开始烧录: {parameters.FilePath} -> {parameters.DeviceAddress}");
-
-        // 第二步：读取固件文件
-        if (!File.Exists(parameters.FilePath))
-        {
-            throw new FileNotFoundException($"固件文件不存在: {parameters.FilePath}");
-        }
-        var firmware = await File.ReadAllBytesAsync(parameters.FilePath, ct);
-        _context?.Log(LogLevel.Info, $"已加载固件，大小: {firmware.Length} 字节");
-
-        // 第三步：获取通讯器
-        var communicator = _context?.GetCommunicator(parameters.CommunicatorId);
-        if (communicator == null)
-        {
-            throw new InvalidOperationException($"找不到通讯器: {parameters.CommunicatorId}");
-        }
-
-        // 第四步：连接设备
-        await communicator.ConnectAsync(parameters.DeviceAddress, timeoutMs: 5000, ct);
-        _context?.Log(LogLevel.Info, "设备已连接");
-
-        try
-        {
-            // 第五步：发送进入烧录模式命令
-            await communicator.SendAsync(parameters.DeviceAddress, "BURN_MODE\n"u8.ToArray(), ct);
-            await Task.Delay(200, ct); // 等待设备切换模式
-
-            // 第六步：分块发送固件
-            const int chunkSize = 256;
-            var totalChunks = (firmware.Length + chunkSize - 1) / chunkSize;
-            
-            for (var i = 0; i < firmware.Length; i += chunkSize)
-            {
-                ct.ThrowIfCancellationRequested();
-                
-                var chunk = firmware[i..Math.Min(i + chunkSize, firmware.Length)];
-                await communicator.SendAsync(parameters.DeviceAddress, chunk, ct);
-                
-                var progress = (i / chunkSize + 1) * 100 / totalChunks;
-                _context?.Log(LogLevel.Debug, $"烧录进度: {progress}%");
-                
-                await Task.Delay(10, ct); // 给设备处理时间
-            }
-
-            // 第七步：发送完成命令并验证
-            await communicator.SendAsync(parameters.DeviceAddress, "BURN_DONE\n"u8.ToArray(), ct);
-            var response = await communicator.ReadAsync(parameters.DeviceAddress, timeoutMs: 5000, ct);
-            var responseStr = System.Text.Encoding.UTF8.GetString(response);
-
-            if (!responseStr.Contains("OK"))
-            {
-                throw new InvalidOperationException($"烧录验证失败: {responseStr}");
-            }
-
-            _context?.Log(LogLevel.Info, "✅ 烧录成功！");
-            
-            // 返回结果 JSON
-            var result = JsonSerializer.SerializeToUtf8Bytes(new
-            {
-                success = true,
-                bytes_written = firmware.Length,
-                device = parameters.DeviceAddress
-            });
-            return result;
-        }
-        finally
-        {
-            // 确保断开连接
-            await communicator.DisconnectAsync(parameters.DeviceAddress, ct);
-        }
-    }
-}
-```
-
-### manifest.json
-
-```json
-{
-    "id": "acme.firmware-burner",
-    "name": "Acme Firmware Burner",
-    "version": "1.0.0",
-    "entry": "Acme.Burner.dll",
-    "capabilities": {
-        "protocols": [],
-        "tasks": ["burn_firmware"]
-    }
-}
-```
-
-### UI 中的配置
-
-在 Catalytic UI 的测试步骤配置中：
-
-1. 选择模式：**Host**
-2. 任务名称：`burn_firmware`
-3. 参数 JSON：
-   ```json
-   {
-       "FilePath": "/path/to/firmware.bin",
-       "DeviceAddress": "COM3",
-       "CommunicatorId": "acme.serial"
-   }
-   ```
-
----
-
-## 8. 错误处理最佳实践
-
-### 8.1 异常类型选择
+### 7.1 异常类型选择
 
 | 异常类型 | 使用场景 |
 |----------|----------|
@@ -959,7 +802,7 @@ public class FirmwareBurner : IProcessor
 | `NotSupportedException` | 不支持的操作 |
 | `OperationCanceledException` | 用户取消（由 CancellationToken 触发）|
 
-### 8.2 正确使用 CancellationToken
+### 7.2 正确使用 CancellationToken
 
 ```csharp
 public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct)
@@ -980,7 +823,7 @@ public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken 
 }
 ```
 
-### 8.3 不需要手动捕获的异常
+### 7.3 不需要手动捕获的异常
 
 Host 会自动捕获插件抛出的异常并：
 - 将异常消息通过 `SubmitError` 返回给 Engine
@@ -1004,7 +847,7 @@ catch (Exception ex)
 }
 ```
 
-### 8.4 资源清理
+### 7.4 资源清理
 
 ```csharp
 public async Task<byte[]> ExecuteAsync(string address, string action, ...)
@@ -1033,9 +876,9 @@ public async Task<byte[]> ExecuteAsync(...)
 
 ---
 
-## 9. 高级功能
+## 8. 高级功能
 
-### 9.1 插件互调
+### 8.1 插件互调
 
 处理器可以调用其他通讯器：
 
@@ -1058,7 +901,7 @@ public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken 
 }
 ```
 
-### 9.2 访问插件目录资源
+### 8.2 访问插件目录资源
 
 ```csharp
 public Task ActivateAsync(IPluginContext context)
@@ -1077,7 +920,7 @@ public Task ActivateAsync(IPluginContext context)
 }
 ```
 
-### 9.3 推送异步事件
+### 8.3 推送异步事件
 
 用于设备主动推送数据（如 CAN 帧监控、设备报警）或状态变更（如断线通知）。
 
@@ -1111,7 +954,7 @@ public void OnDataReceived(byte[] data)
 }
 ```
 
-### 9.4 低代码模式数据推送 (Low-Code Data Push)
+### 8.4 低代码模式数据推送 (Low-Code Data Push)
 
 当使用 Catalytic Engine 的低代码模式（Engine Controlled）判断 Pass/Fail 时，Host 会使用特殊的 `FetchData` 指令来获取设备数据。为了确保 Engine 能正确解析数据（Regex/Numeric Check）：
 
@@ -1124,7 +967,7 @@ public void OnDataReceived(byte[] data)
 _context?.PushDeviceData(address, System.Text.Encoding.UTF8.GetBytes("VOLT 5.003"));
 ```
 
-### 9.5 业务插件获取数据 (Processor Data Pull)
+### 8.5 业务插件获取数据 (Processor Data Pull)
 
 业务插件（Processor）在执行计算任务时，可以通过 `GetDeviceData` 接口从 Host 蓄水池中拉取设备刚才推送的数据。
 
@@ -1154,9 +997,9 @@ public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken 
 
 ---
 
-## 10. 调试与排查问题
+## 9. 调试与排查问题
 
-### 10.1 使用日志
+### 9.1 使用日志
 
 ```csharp
 _context?.Log(LogLevel.Debug, "调试信息：变量值 = " + value);
@@ -1167,7 +1010,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 
 日志会显示在 Catalytic UI 的系统日志面板中。
 
-### 10.2 使用 Visual Studio 附加调试
+### 9.2 使用 Visual Studio 附加调试
 
 1. 启动 Catalytic Host
 2. 打开 Visual Studio，选择 **Debug > Attach to Process**
@@ -1175,7 +1018,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 4. 在你的插件代码中设置断点
 5. 触发插件执行，断点会命中
 
-### 10.3 常见问题检查清单
+### 9.3 常见问题检查清单
 
 | 问题 | 检查项 |
 |------|--------|
@@ -1186,7 +1029,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 
 ---
 
-## 11. 部署插件
+## 10. 部署插件
 
 ### 目录结构
 
@@ -1222,25 +1065,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 
 ---
 
-## 12. 日志与流量监控 (重要变更)
-
-> [!IMPORTANT]
-> **自 v4.0 (2026-02-01) 起，插件不再负责记录底层流量日志。**
-
-为了提高系统的健壮性，原本由插件直接调用的流量记录（Traffic Logging）逻辑已上移至 **Host Service 层**。
-
-### 为什么变更？
-- **一致性**: 统一所有插件的日志格式和记录时机。
-- **可靠性**: 即使插件因为超时或异常退出，Host 依然能通过事件通知记录下已经收到的数据。
-
-### 开发者注意事项
-1. **禁止在插件内手动调用 `LogTraffic`**: 避免日志重复。
-2. **专注于数据上报**: 插件只需专注于将接收到的数据通过 `PushEvent` (或 `ReadAsync` 返回值) 传递给 Host。
-3. **系统日志依然可用**: 插件仍然应该调用 `context.Log(LogLevel.Info, ...)` 来记录自身的生命周期和内部状态。
-
----
-
-## 13. 常见问题 FAQ
+## 11. 常见问题 FAQ
 
 ### Q1: manifest.json 格式报错
 
@@ -1306,12 +1131,15 @@ dotnet publish -c Release --self-contained false
 | `CatalyticKit.dll` | SDK 动态库 |
 | `IPlugin.cs` | 接口定义 |
 | `CommAction.cs` | 标准动作枚举 |
-| `CommunicatorExtensions.cs` | 扩展方法 |
+| `CommunicatorExtensions.cs` | 通讯器扩展方法 |
+| `ContextExtensions.cs` | 上下文扩展方法 |
 | `PluginEvents.cs` | 标准事件常量 |
 | `LogLevel.cs` | 日志级别 |
+| `Extensions/ByteExtension.cs` | 字节数组工具 |
+| `Extensions/StringExtension.cs` | 字符串工具 |
 
 ---
 
-> **文档版本**: 4.0.0  
-> **最后更新**: 2026-01-16  
-> **适用 SDK 版本**: 4.0.0+
+> **文档版本**: 0.1.0  
+> **最后更新**: 2026-02-05  
+> **适用 SDK 版本**: 0.1.0+

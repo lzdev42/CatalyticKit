@@ -3,12 +3,7 @@ namespace CatalyticKit;
 public static class ByteExtension
 {
     /// <summary>
-    /// 将字节数组转换为十六进制字符串表示形式。
-    /// </summary>
-    /// <param name="data">要转换的字节数组。</param>
-    /// <returns>十六进制字符串表示形式。</returns>
-    /// <summary>
-    /// 将字节数组转换为带空格的十六进制字符串（例如：A0 B1 C2）。
+    /// 将字节数组转换为带空格的十六进制字符串（例如：A0 B1 C2）
     /// </summary>
     public static string ToHexStringWithSpaces(this byte[] data)
     {

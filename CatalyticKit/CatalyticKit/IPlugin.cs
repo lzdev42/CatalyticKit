@@ -20,13 +20,6 @@ public interface IPluginContext
     void Log(LogLevel level, string message);
 
     /// <summary>
-    /// 记录通讯流量日志 (Hex 格式)
-    /// </summary>
-    /// <param name="direction">流量方向 (e.g. "Host->Device")</param>
-    /// <param name="message">流量内容 (Hex String)</param>
-    void LogTraffic(string direction, string message);
-
-    /// <summary>
     /// 获取指定协议或 ID 的通讯器
     /// 用于业务插件调用底层通讯插件
     /// </summary>
