@@ -76,9 +76,6 @@ public class SocketCommunicator : ICommunicator
                     
                     case CommAction.Query:
                         await HandleSend(address, payload);
-                        return await HandleWait(address, timeoutMs, null, ct); 
-                        
-                    case CommAction.Wait:
                         return await HandleWait(address, timeoutMs, null, ct);
     
                     case CommAction.Status:
@@ -139,9 +136,6 @@ public class SocketCommunicator : ICommunicator
                     case CommAction.Query:
                         await HandleSend(address, payload);
                         return await HandleWait(address, options.TimeoutMs, options.Terminator, ct); 
-                        
-                    case CommAction.Wait:
-                        return await HandleWait(address, options.TimeoutMs, options.Terminator, ct);
     
                     case CommAction.Status:
                         var client = GetClientOrThrow(address);
@@ -199,7 +193,7 @@ public class SocketCommunicator : ICommunicator
         
         _clients[address] = client;
         _context?.Log(LogLevel.Info, $"[{address}] Connected");
-        _context?.LogTraffic($"Host->{address}", "CONNECT");
+        _context?.Log(LogLevel.Debug, $"[{address}] CONNECT Flow");
         return Array.Empty<byte>();
     }
 
@@ -218,7 +212,7 @@ public class SocketCommunicator : ICommunicator
     {
         var client = GetClientOrThrow(address);
         await client.SendAsync(payload);
-        _context?.LogTraffic($"Host->{address}", HexUtil.ToHexString(payload));
+        _context?.Log(LogLevel.Debug, $"[{address}] Sent: {payload.ToHexStringWithSpaces()}");
         return Array.Empty<byte>();
     }
 
@@ -227,7 +221,7 @@ public class SocketCommunicator : ICommunicator
         var client = GetClientOrThrow(address);
         var data = client.ReadAll();
         if (data.Length > 0)
-            _context?.LogTraffic($"{address}->Host", HexUtil.ToHexString(data));
+            _context?.Log(LogLevel.Debug, $"[{address}] Read: {data.ToHexStringWithSpaces()}");
         return Task.FromResult(data);
     }
 
