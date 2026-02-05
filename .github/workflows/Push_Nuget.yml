@@ -29,12 +29,17 @@ jobs:
       - name: Build SDK
         run: dotnet build CatalyticKit/CatalyticKit/CatalyticKit.csproj -c Release --no-restore
 
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Pack SDK
         run: |
           dotnet pack CatalyticKit/CatalyticKit/CatalyticKit.csproj \
             -c Release \
             -o nupkgs \
-            --no-build
+            --no-build \
+            -p:PackageVersion=${{ steps.get_version.outputs.VERSION }}
       
       - name: Show package info
         run: |
@@ -62,4 +67,4 @@ jobs:
             --api-key ${{ secrets.NUGET_API_KEY }} \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
-          echo "✅ Published to Nu
+          echo "✅ Published to NuGet!"
