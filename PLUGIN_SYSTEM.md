@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.3.0 | Updated: 2026-02-10
+> SDK Version: 0.2.0 | Updated: 2026-02-10
 
 ## Overview
 
