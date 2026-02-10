@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.1.0 | Updated: 2026-02-05
+> SDK Version: 0.3.0 | Updated: 2026-02-10
 
 ## Overview
 
@@ -216,6 +216,70 @@ public interface IPluginContext
     byte[] GetDeviceData(string deviceId);
 }
 ```
+
+---
+
+## Service API (Plugin → Host Control)
+
+Plugins can actively control the test flow via the static `Service` class:
+
+```csharp
+// Global commands
+Service.StartAll();              // Start all slots
+Service.StopAll();               // Stop all slots
+
+// Per-slot commands
+Service.Slot(0).Start();         // Start slot 0
+Service.Slot(0).Stop();          // Stop slot 0
+Service.Slot(0).SetSN("ABC");    // Set SN for slot 0
+Service.Slot(0).SetVariable("key", "\"value\"");  // Set context variable
+
+// Per-slot events
+Service.Slot(0).TestStarted += () => { /* ... */ };
+Service.Slot(0).TestFinished += (passed, msg) => { /* ... */ };
+Service.Slot(0).StepFinished += (stepIndex, passed) => { /* ... */ };
+```
+
+### IHostBridge (Host Must Implement)
+
+Host provides the actual implementation via `Service.SetBridge(bridge)` at startup:
+
+```csharp
+public interface IHostBridge
+{
+    // Global Commands
+    void StartAll();
+    void StopAll();
+
+    // Slot Commands
+    void SlotStart(int slotIndex);
+    void SlotStop(int slotIndex);
+    void SlotSetSN(int slotIndex, string sn);
+    void SlotSetVariable(int slotIndex, string name, string jsonValue);
+    string? SlotGetVariable(int slotIndex, string name);
+
+    // Event Subscription
+    void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
+    void UnsubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
+
+    // Error Reporting
+    void ReportPluginError(string pluginId, Exception exception);
+}
+```
+
+> **Note**: All `IHostBridge` methods may be called from any thread concurrently. Implementations must be thread-safe.
+
+---
+
+## Thread Safety Contracts
+
+| Component | Guarantee |
+|-----------|-----------|
+| `Service` static methods | Thread-safe (volatile + ConcurrentDictionary) |
+| `ISlot` event subscribe/unsubscribe | Thread-safe (lock-protected) |
+| `ISlot` event invocation | Snapshot pattern (no deadlock if handler calls Service) |
+| `ISlot` event handler exceptions | Caught by SDK, reported via `IHostBridge.ReportPluginError()` |
+| `IHostBridge` implementation | **Must be thread-safe** (Host responsibility) |
 
 ---
 

@@ -1,6 +1,6 @@
-# Catalytic 插件开发指南 (v0.1)
+# Catalytic 插件开发指南 (v0.3)
 
-*(更新日期: 2026-02-05 | SDK 版本: 0.1.0)*
+*(更新日期: 2026-02-10 | SDK 版本: 0.3.0)*
 
 ---
 
@@ -267,7 +267,75 @@ plugins/
 │  [Host 关闭]                                                 │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+
+### 4.4 Service API (控制与事件)
+
+Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测试流程并**监听**状态变化。这对于集成外部硬件（如 PLC、机械手）非常有用。
+
+#### 全局命令
+
+| 方法 | 说明 |
+|------|------|
+| `Service.StartAll()` | 启动所有 Slot 的测试（非阻塞）|
+| `Service.StopAll()` | 停止所有 Slot 的测试（非阻塞）|
+
+#### 单 Slot 命令
+
+| 方法 | 说明 |
+|------|------|
+| `Service.Slot(0).Start()` | 启动指定 Slot 测试（非阻塞）|
+| `Service.Slot(0).Stop()` | 停止指定 Slot 测试（非阻塞）|
+| `Service.Slot(0).SetSN("ABC")` | 设置产品 SN |
+| `Service.Slot(0).SetVariable(name, json)` | 设置流程变量 |
+| `Service.Slot(0).GetVariable(name)` | 获取流程变量 |
+
+#### 事件监听
+
+| 事件 | 签名 | 说明 |
+|------|------|------|
+| `TestStarted` | `Action` | 测试开始时触发 |
+| `TestFinished` | `Action<bool, string?>` | 测试结束时触发 (passed, message) |
+| `StepFinished` | `Action<int, bool>` | 单步结束时触发 (stepIndex, passed) |
+
+#### 线程安全
+
+> ✅ **Service API 是完全线程安全的。** 你可以从任意线程调用 `Service` 的任何方法或订阅事件，SDK 内部已做防护。即使你在事件回调中调用 `Service.Slot(x).Start()` 也不会死锁。
+
+> ✅ **事件回调异常保护。** 如果你的事件处理代码抛出异常，SDK 会自动捕获并上报给 Host，不会导致 Host 崩溃。
+
+#### 代码示例：PLC 集成
+
+```csharp
+public class PlcPlugin : ICommunicator
+{
+    public async Task ActivateAsync(IPluginContext context)
+    {
+        // 1. 监听测试结束事件
+        Service.Slot(0).TestFinished += (passed, msg) => 
+        {
+            if (passed) 
+                PlcDriver.MoveToPass();
+            else 
+                PlcDriver.MoveToFail();
+        };
+
+        // 2. 监听 PLC 信号 -> 触发所有 Slot 测试
+        PlcDriver.OnMaterialArrived += (sn) => 
+        {
+            Service.Slot(0).SetSN(sn);
+            Service.StartAll();  // 启动所有 Slot
+        };
+
+        // 3. 紧急停止
+        PlcDriver.OnEmergencyStop += () => 
+        {
+            Service.StopAll();  // 停止所有 Slot
+        };
+    }
+}
 ```
+
+> ⚠️ **注意**: 所有控制指令（如 `Start`、`StartAll`）都是**非阻塞 (Fire-and-Forget)** 的。调用 `Start()` 只是向 Host 发送请求，Host 会在稍后调度执行。不要假设调用返回后测试已经开始。
 
 ---
 
@@ -1129,17 +1197,23 @@ dotnet publish -c Release --self-contained false
 | 文件 | 说明 |
 |------|------|
 | `CatalyticKit.dll` | SDK 动态库 |
-| `IPlugin.cs` | 接口定义 |
-| `CommAction.cs` | 标准动作枚举 |
-| `CommunicatorExtensions.cs` | 通讯器扩展方法 |
-| `ContextExtensions.cs` | 上下文扩展方法 |
+| `IPlugin.cs` | 插件接口定义 (`IPlugin` / `ICommunicator` / `IProcessor` / `IPluginContext`) |
+| `ISlot.cs` | Slot 操作接口 (命令 + 事件) |
+| `IHostBridge.cs` | Host 桥接接口 (Host 必须实现) |
+| `ISlotEventHandler.cs` | Slot 事件回调接口 |
+| `Service.cs` | 静态 Service 入口 (全局命令 + Slot 访问) |
+| `SlotProxy.cs` | ISlot 内部实现 (线程安全事件 + 命令转发) |
+| `ServiceNotInitializedException.cs` | Service 未初始化异常 |
+| `CommAction.cs` | 标准通讯动作枚举 |
+| `CommunicatorExtensions.cs` | ICommunicator 便捷扩展方法 |
+| `ContextExtensions.cs` | IPluginContext 便捷扩展方法 |
 | `PluginEvents.cs` | 标准事件常量 |
-| `LogLevel.cs` | 日志级别 |
+| `LogLevel.cs` | 日志级别枚举 |
 | `Extensions/ByteExtension.cs` | 字节数组工具 |
 | `Extensions/StringExtension.cs` | 字符串工具 |
 
 ---
 
-> **文档版本**: 0.1.0  
-> **最后更新**: 2026-02-05  
-> **适用 SDK 版本**: 0.1.0+
+> **文档版本**: 0.3.0  
+> **最后更新**: 2026-02-10  
+> **适用 SDK 版本**: 0.3.0+

@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catalytic | The Industrial Standard</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- 引入 Babel 用于在浏览器中编译 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+        }
+
+        /* 动画定义 */
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fade-in 0.6s ease-out forwards;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 图标组件定义 (内联 SVG 以避免依赖问题) ---
+        const IconWrapper = ({ children, size = 24, className = "", ...props }) => (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={className}
+                {...props}
+            >
+                {children}
+            </svg>
+        );
+
+        const ShieldCheck = (props) => (
+            <IconWrapper {...props}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+                <path d="m9 12 2 2 4-4" />
+            </IconWrapper>
+        );
+
+        const ChevronRight = (props) => (
+            <IconWrapper {...props}>
+                <path d="m9 18 6-6-6-6" />
+            </IconWrapper>
+        );
+
+        const Monitor = (props) => (
+            <IconWrapper {...props}>
+                <rect width="20" height="14" x="2" y="3" rx="2" />
+                <line x1="8" x2="16" y1="21" y2="21" />
+                <line x1="12" x2="12" y1="17" y2="21" />
+            </IconWrapper>
+        );
+
+        const Box = (props) => (
+            <IconWrapper {...props}>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" x2="12" y1="22.08" y2="12" />
+            </IconWrapper>
+        );
+
+        const Plus = (props) => (
+            <IconWrapper {...props}>
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+            </IconWrapper>
+        );
+
+        const Compass = (props) => (
+            <IconWrapper {...props}>
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+            </IconWrapper>
+        );
+
+        const Code2 = (props) => (
+            <IconWrapper {...props}>
+                <path d="m18 16 4-4-4-4" />
+                <path d="m6 8-4 4 4 4" />
+                <path d="m14.5 4-5 16" />
+            </IconWrapper>
+        );
+
+        const Lock = (props) => (
+            <IconWrapper {...props}>
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </IconWrapper>
+        );
+
+        const ArrowRight = (props) => (
+            <IconWrapper {...props}>
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+            </IconWrapper>
+        );
+
+        const Download = (props) => (
+            <IconWrapper {...props}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" x2="12" y1="15" y2="3" />
+            </IconWrapper>
+        );
+
+        const WindowsIcon = (props) => (
+            <IconWrapper {...props}>
+                <path d="M4 6v12l7 1.5V4.5zM13 4.25V11h8V3zM13 13v6.75l8-1.25V13z" />
+            </IconWrapper>
+        );
+
+        const AppleIcon = (props) => (
+            <IconWrapper {...props} fill="currentColor" stroke="none">
+                <path d="M12.152 6.896c-.548 0-1.411-.516-2.438-.516-1.357 0-2.714.836-3.407 2.015-1.403 2.383-.358 5.91 1.011 7.867.669.956 1.472 2.031 2.507 1.992 1.002-.04 1.376-.639 2.59-.639 1.211 0 1.551.639 2.61.619 1.077-.02 1.776-.974 2.441-1.921.766-1.11 1.08-2.188 1.099-2.247-.024-.01-2.108-.813-2.131-3.21-.019-2.014 1.637-2.984 1.714-3.031-1.01-1.464-2.55-1.631-3.023-1.666-.884-.071-1.358.531-1.973.531zm.557-1.778c.451-.555.753-1.326.669-2.118-.679.027-1.5.452-1.987 1.017-.438.506-.821 1.288-.718 2.067.757.058 1.585-.411 2.036-.966z" />
+            </IconWrapper>
+        );
+
+        const LinuxIcon = (props) => (
+            <IconWrapper {...props} fill="currentColor" stroke="none">
+                <path d="M12.642 8.084c-.364.189-.79.42-1.242.42s-.81-.209-1.066-.413c-.13-.101-.234-.202-.313-.276-.137-.108-.12-.259-.064-.254.094.012.108.136.168.191.08.075.18.172.302.269.243.192.567.38.973.38s.878-.238 1.167-.4c.163-.092.371-.256.541-.381.13-.095.125-.21.232-.198.107.013.028.127-.122.258a3.404 3.404 0 0 1-.576.404z" />
+                <path d="M19.649 17.77c-.142-.16-.209-.456-.281-.771s-.153-.654-.411-.874l-.002-.001a1.054 1.054 0 0 0-.317-.192c.359-1.065.219-2.126-.145-3.084-.444-1.177-1.222-2.202-1.815-2.903-.664-.838-1.313-1.633-1.301-2.808.021-1.793.197-5.118-2.958-5.122a4.66 4.66 0 0 0-.401.017c-3.526.283-2.59 4.008-2.643 5.255-.064.912-.249 1.631-.877 2.523-.736.876-1.774 2.295-2.266 3.771-.232.697-.342 1.407-.241 2.08a1.9 1.9 0 0 0-.091.089c-.216.231-.376.511-.555.699-.166.167-.403.229-.664.323s-.547.231-.721.565l-.001.002a1 1 0 0 0-.108.484c0 .154.023.311.046.461.048.313.097.609.032.81-.206.564-.232.954-.087 1.237.146.284.444.409.783.479.676.141 1.592.106 2.314.489l.062-.117-.061.118c.773.404 1.557.547 2.182.405.454-.104.821-.374 1.011-.789.489-.002 1.025-.209 1.885-.256.583-.047 1.312.207 2.149.16a1.119 1.119 0 0 0 .099.264c.324.649.928.946 1.571.896s1.329-.43 1.883-1.089l-.102-.085.102.084c.527-.64 1.403-.905 1.984-1.255.29-.175.525-.395.544-.713.018-.318-.169-.675-.599-1.152zm-7.79-11.708c-.003-.234.036-.435.126-.639s.201-.351.358-.47.312-.174.494-.176h.009c.179 0 .332.053.489.167.159.116.274.261.366.463a1.493 1.493 0 0 1 .141.636c.002.235-.038.435-.127.639a1.23 1.23 0 0 1-.18.299l-.074-.033c-.089-.038-.167-.069-.237-.096s-.124-.044-.181-.064c.041-.049.122-.108.151-.181a.943.943 0 0 0 .072-.347l.002-.016a.953.953 0 0 0-.05-.337c-.038-.113-.086-.195-.155-.263s-.139-.099-.223-.101h-.011a.324.324 0 0 0-.217.086.618.618 0 0 0-.174.25.944.944 0 0 0-.072.348l-.001.015a.992.992 0 0 0 .014.2 2.463 2.463 0 0 0-.507-.171 1.681 1.681 0 0 1-.014-.19v-.019zm-2.144.052c-.012-.202.009-.376.064-.556s.13-.311.238-.418a.516.516 0 0 1 .349-.168h.03c.118 0 .225.04.335.127a.968.968 0 0 1 .284.389c.076.171.116.343.127.545v.002a1.51 1.51 0 0 1-.002.243c-.023.006-.046.014-.068.021-.128.044-.23.093-.328.158a.845.845 0 0 0 .003-.214v-.012a.95.95 0 0 0-.068-.274.523.523 0 0 0-.138-.203c-.052-.044-.1-.065-.153-.064l-.017.001c-.061.005-.11.034-.157.092a.536.536 0 0 0-.101.223.912.912 0 0 0-.019.293l.001.012c.01.103.031.189.067.275a.528.528 0 0 0 .166.224c-.059.045-.098.078-.146.113l-.11.081a.995.995 0 0 1-.229-.342 1.528 1.528 0 0 1-.128-.546v-.002zm.155 1.228c.187-.14.315-.234.402-.298.086-.063.121-.086.148-.112h.001c.14-.132.362-.374.699-.49.115-.04.245-.065.39-.066.275-.001.608.089 1.01.348.247.16.439.174.882.363h.001c.213.087.338.202.399.321.061.12.063.25.012.387-.103.273-.429.562-.887.705h-.001c-.224.072-.418.233-.647.364a1.449 1.449 0 0 1-.842.217 1.105 1.105 0 0 1-.374-.083 1.202 1.202 0 0 1-.27-.167c-.161-.131-.303-.295-.51-.416h-.002c-.333-.19-.515-.408-.573-.598-.057-.189-.003-.351.162-.475zm.131 13.018v.001c-.047.623-.398.961-.938 1.085-.539.123-1.27 0-1.999-.381h-.001c-.808-.427-1.768-.385-2.384-.514-.308-.064-.509-.161-.602-.341-.092-.18-.094-.494.102-1.028l.001-.002.001-.002c.097-.299.025-.626-.021-.934-.047-.307-.07-.586.034-.781l.001-.002c.135-.259.332-.352.576-.439.245-.088.534-.157.764-.386l.001-.001.001-.001c.212-.223.371-.503.557-.702.157-.167.314-.279.551-.28h.009c.041 0 .085.003.132.011.314.047.588.268.853.625l.762 1.389h.001c.202.423.631.89.994 1.365.362.475.644.952.607 1.317l-.002.001zm-.063-1.01a6.721 6.721 0 0 0-.333-.469 13.467 13.467 0 0 0-.229-.293c.151 0 .28-.024.384-.072a.486.486 0 0 0 .266-.274c.09-.242 0-.583-.288-.973-.29-.39-.778-.83-1.494-1.269-.527-.328-.821-.729-.959-1.165s-.119-.907-.013-1.373c.204-.894.729-1.762 1.063-2.308.09-.066.032.123-.339.811-.332.629-.953 2.081-.103 3.214a6.722 6.722 0 0 1 .538-2.398c.472-1.067 1.456-2.919 1.534-4.395.041.029.18.123.241.158.182.106.316.262.492.403.177.142.396.264.729.283l.093.003c.343 0 .61-.112.833-.239.242-.138.436-.292.618-.351h.001c.387-.122.694-.335.869-.585.302 1.186 1.001 2.897 1.45 3.733.239.443.715 1.385.92 2.52.13-.004.273.015.427.054.537-1.393-.455-2.892-.909-3.31-.184-.178-.192-.258-.102-.254.492.436 1.139 1.311 1.374 2.3.107.451.13.925.016 1.393.056.023.113.048.171.076.862.42 1.181.785 1.027 1.283-.05-.002-.1-.001-.148 0h-.014c.125-.395-.151-.687-.889-1.02-.764-.336-1.373-.303-1.476.379a1.302 1.302 0 0 0-.017.109c-.057.02-.114.045-.172.076-.358.197-.555.553-.664.99-.108.437-.14.964-.17 1.558-.019.298-.141.702-.266 1.129-1.249.897-2.986 1.283-4.461.276zm9.628.057c-.524.317-1.456.593-2.05 1.313-.517.615-1.146.952-1.7.996-.555.044-1.033-.186-1.315-.752v-.001l-.001-.003c-.175-.333-.102-.858.045-1.412.147-.554.359-1.123.388-1.585v-.001c.03-.592.063-1.11.163-1.509.1-.399.256-.669.533-.821l.039-.02c.031.513.285 1.036.734 1.149.491.129 1.199-.292 1.498-.636.06-.002.118-.006.175-.007.262-.006.481.009.707.205v.001h.001c.173.146.255.423.326.733.071.31.128.647.342.888h.001c.41.456.542.764.531.96-.011.198-.153.344-.417.502z" />
+                <path d="M11.738 6.762c.015.048.093.04.138.063.04.02.071.065.116.066.042.001.107-.015.113-.057.008-.056-.073-.091-.126-.111-.067-.026-.153-.039-.216-.004-.014.008-.03.027-.025.043zm-.46 0c-.016.048-.094.04-.139.063-.039.02-.071.065-.115.066-.042.001-.108-.015-.114-.057-.007-.056.074-.091.126-.111.067-.026.153-.039.217-.004.015.008.03.027.025.043z" />
+            </IconWrapper>
+        );
+
+        const LayoutTemplate = (props) => (
+            <IconWrapper {...props}>
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <line x1="3" x2="21" y1="9" y2="9" />
+                <line x1="9" x2="9" y1="9" y2="21" />
+            </IconWrapper>
+        );
+
+        const CheckCircle2 = (props) => (
+            <IconWrapper {...props}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="m9 12 2 2 4-4" />
+            </IconWrapper>
+        );
+
+
+        // --- 页面组件 ---
+
+        const LandingPage = ({ onNavigate }) => (
+            <div className="animate-fade-in">
+                {/* Hero Section */}
+                <section className="relative pt-40 pb-32 px-6 text-center">
+                    <div className="max-w-3xl mx-auto">
+                        <h2 className="text-orange-500 font-semibold text-lg mb-6 tracking-wide">全新定义</h2>
+                        <h1 className="text-6xl md:text-[80px] font-semibold tracking-tighter mb-8 leading-[1.05] bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-gray-500">
+                            精密<br />
+                            稳如磐石
+                        </h1>
+                        <p className="max-w-md mx-auto text-gray-400 text-xl font-normal leading-relaxed mb-12">
+                            用 Rust 重写底层，确立工业级系统的严苛标准。
+                            <br />
+                            让每一次运行，都具备确定性的可靠保障。
+                        </p>
+                        <div className="flex items-center justify-center gap-6 text-blue-500 text-lg font-medium">
+                            <button onClick={() => onNavigate('arch')} className="hover:underline flex items-center gap-1 group">
+                                进一步了解架构 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                            </button>
+                            <button onClick={() => onNavigate('download')} className="hover:underline flex items-center gap-1 group">
+                                观看演示 <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                {/* 技术模块 1 - Rust */}
+                <section id="rust" className="py-32 px-6 bg-[#050505]">
+                    <div className="max-w-4xl mx-auto text-center">
+                        <div className="w-16 h-16 mx-auto bg-gradient-to-tr from-gray-800 to-gray-900 rounded-2xl flex items-center justify-center mb-10 border border-white/10 shadow-2xl">
+                            <ShieldCheck size={32} className="text-gray-300" />
+                        </div>
+                        <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-6">
+                            安全 性能 稳定
+                        </h2>
+                        <p className="max-w-2xl mx-auto text-gray-400 text-xl leading-relaxed">
+                            内存安全不再是挑战，而是系统的底层共识。
+                            <br />
+                            Catalytic 采用 Rust 开发核心引擎，从根源上降低了系统崩溃的风险。
+                            <br />
+                            这不仅是技术选择，更是对工业生产连续性的极致尊重。
+                        </p>
+                    </div>
+                </section>
+
+                {/* 技术模块 2 - .NET */}
+                <section id="dotnet" className="py-32 px-6 bg-black">
+                    <div className="max-w-5xl mx-auto">
+                        <div className="bg-[#111] rounded-[40px] p-12 md:p-20 text-center overflow-hidden relative group border border-white/5">
+                            <div className="relative z-10">
+                                <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-8">
+                                    开放生态<br />
+                                    敏捷集成
+                                </h2>
+                                <p className="max-w-2xl mx-auto text-gray-400 text-lg leading-relaxed mb-12">
+                                    基于 .NET Core 构建的插件体系，让扩展变得简单高效。
+                                    <br />
+                                    无论是异构协议的适配，还是定制化算法的实施，
+                                    <br />
+                                    都能在标准化的框架下快速部署，实现与现有业务的无缝共生。
+                                </p>
+                                <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
+                                    <Plus size={14} /> <span>适配所有标准 NuGet 包</span>
+                                </div>
+                            </div>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/10 blur-[120px] rounded-full -z-0 pointer-events-none"></div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* 技术模块 3 - Compose */}
+                <section id="compose" className="py-32 px-6">
+                    <div className="max-w-4xl mx-auto text-center">
+                        <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-12">
+                            大一统
+                        </h2>
+                        <div className="flex justify-center gap-16 md:gap-32 items-center mb-12 text-gray-500">
+                            <div className="flex flex-col items-center gap-4 group cursor-default hover:text-white transition-colors duration-500">
+                                <WindowsIcon size={48} className="group-hover:scale-110 transition-transform duration-500" strokeWidth={1} />
+                                <span className="text-xs font-medium tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">WINDOWS</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-4 group cursor-default hover:text-white transition-colors duration-500">
+                                <AppleIcon size={48} className="group-hover:scale-110 transition-transform duration-500" strokeWidth={1} />
+                                <span className="text-xs font-medium tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">MACOS</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-4 group cursor-default hover:text-white transition-colors duration-500">
+                                <LinuxIcon size={48} className="group-hover:scale-110 transition-transform duration-500" strokeWidth={1} />
+                                <span className="text-xs font-medium tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">LINUX</span>
+                            </div>
+                        </div>
+                        <p className="max-w-2xl mx-auto text-gray-400 text-lg leading-relaxed">
+                            基于 Compose Multiplatform。
+                            <br />
+                            同一套代码，原生地运行在每一个平台。
+                            <br />
+                            这种一致性，让跨平台不再是妥协，而是一种享受。
+                        </p>
+                    </div>
+                </section>
+
+                {/* Footer CTA */}
+                <section className="py-40 px-6 text-center border-t border-white/10 bg-[#050505]">
+                    <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-10">
+                        Catalytic
+                    </h2>
+                    <div className="flex flex-col items-center gap-6">
+                        <p className="text-gray-500 text-lg">工程美学的极致演绎。</p>
+                        <button onClick={() => onNavigate('download')} className="px-8 py-3 bg-white text-black text-sm font-medium rounded-full hover:bg-gray-100 transition-all hover:scale-105 transform active:scale-95">
+                            获取下载
+                        </button>
+                    </div>
+                </section>
+            </div>
+        );
+
+        const ArchitecturePage = ({ onNavigate }) => (
+            <div className="pt-32 pb-20 px-6 min-h-screen bg-[#050505] animate-fade-in">
+                <div className="max-w-4xl mx-auto">
+                    <button onClick={() => onNavigate('home')} className="mb-12 text-gray-500 hover:text-white flex items-center gap-2 text-sm font-medium transition-colors group">
+                        <ChevronRight className="rotate-180 group-hover:-translate-x-1 transition-transform" size={16} /> 返回首页
+                    </button>
+
+                    <h1 className="text-5xl md:text-7xl font-semibold tracking-tighter mb-8 leading-tight">
+                        以标准<br />
+                        赋能创新
+                    </h1>
+                    <p className="text-xl text-gray-400 leading-relaxed mb-20 max-w-2xl">
+                        建立透明且严谨的工程规范，是承载复杂业务的前提。<br />
+                        Catalytic 并非为灵活性而妥协，而是为工业标准化而生。
+                    </p>
+
+                    {/* 核心架构图示 */}
+                    <div className="grid md:grid-cols-2 gap-8 mb-32">
+                        {/* 左侧：引擎 */}
+                        <div className="bg-[#111] border border-white/10 rounded-3xl p-10 flex flex-col justify-between h-[500px] relative overflow-hidden group hover:border-white/20 transition-colors">
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center mb-6">
+                                    <Lock size={24} className="text-white" />
+                                </div>
+                                <h3 className="text-2xl font-semibold mb-4">核心引擎</h3>
+                                <p className="text-gray-400 leading-relaxed text-sm">
+                                    这是系统稳定运行的不可变内核。
+                                    <br /><br />
+                                    我们通过解耦业务逻辑，确保了状态流转与资源调度的极致纯净。底层代码经过严格验证，不随业务变更而波动。
+                                    <br /><br />
+                                    这种“内核级”的稳定性设计，保证了无论上层应用如何扩展，地基始终坚如磐石。
+                                </p>
+                            </div>
+                            <div className="mt-8 pt-8 border-t border-white/5 text-xs font-mono text-gray-600">
+                                STATE: IMMUTABLE / RUST
+                            </div>
+                            <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/[0.02] rounded-tl-[100px] group-hover:scale-110 transition-transform duration-700"></div>
+                        </div>
+
+                        {/* 右侧：插件 */}
+                        <div className="bg-white text-black border border-white/10 rounded-3xl p-10 flex flex-col justify-between h-[500px] relative overflow-hidden">
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-black/5 rounded-xl flex items-center justify-center mb-6">
+                                    <LayoutTemplate size={24} className="text-black" />
+                                </div>
+                                <h3 className="text-2xl font-semibold mb-4">适配插件</h3>
+                                <p className="text-gray-600 leading-relaxed text-sm">
+                                    这是开发者施展创意的地方，通过标准接口实现无限可能。
+                                    <br /><br />
+                                    所有的非标协议、特定的计算逻辑，都被严谨地封装在插件中。开发者只需遵循引擎定义的接口契约。
+                                    <br /><br />
+                                    通过这种“契约化”设计，我们将碎片化的定制需求，转化为标准化的工业组件。
+                                </p>
+                            </div>
+                            <div className="mt-8 pt-8 border-t border-black/10 text-xs font-mono text-gray-500">
+                                STATE: ADAPTABLE / .NET
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 接口契约展示 */}
+                    <div className="mb-32">
+                        <h3 className="text-2xl font-semibold mb-8 text-center">工程契约</h3>
+                        <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-8 font-mono text-sm overflow-x-auto shadow-2xl">
+                            <div className="text-gray-500 mb-2">// 所有的设备驱动，均遵循此标准接口</div>
+                            <div className="text-purple-400">public interface</div> <div className="text-yellow-400 inline">IDeviceDriver</div> {'{'}
+                            <div className="pl-6 py-2">
+                                <div className="text-gray-500">// 无论通信协议如何差异化，对引擎而言均为标准 Connect 调用</div>
+                                <span className="text-blue-400">void</span> Connect(<span className="text-blue-400">string</span> address);
+                            </div>
+                            <div className="pl-6 py-2">
+                                <div className="text-gray-500">// 数据交换被抽象为统一的字节流操作</div>
+                                <span className="text-blue-400">byte</span>[] Send(<span className="text-blue-400">byte</span>[] command);
+                            </div>
+                            {'}'}
+                        </div>
+                        <p className="text-center text-gray-500 text-sm mt-6">
+                            精简的接口映射，旨在屏蔽工业现场的异构复杂性。
+                        </p>
+                    </div>
+
+                    <div className="text-center">
+                        <button onClick={() => onNavigate('download')} className="px-8 py-3 bg-white text-black text-sm font-medium rounded-full hover:bg-gray-100 transition-all hover:scale-105 active:scale-95">
+                            获取产品
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const DownloadPage = ({ onNavigate }) => {
+            const platforms = [
+                {
+                    name: 'Windows',
+                    icon: <WindowsIcon size={48} strokeWidth={1} />,
+                    description: '支持 Windows 10/11 (64-bit)',
+                    downloads: [
+                        { label: 'x64 (AMD64)', hint: '标准 PC / 笔记本', link: '#' },
+                        { label: 'ARM64', hint: 'Surface Pro / 骁龙平台', link: '#' }
+                    ]
+                },
+                {
+                    name: 'macOS',
+                    icon: <AppleIcon size={48} strokeWidth={1} />,
+                    description: '支持 macOS 12.0 或更高版本',
+                    downloads: [
+                        { label: 'Apple Silicon (ARM64)', hint: 'M1 / M2 / M3 芯片 系列', link: '#' },
+                        { label: 'Intel (x64)', hint: '传统 Intel 处理器', link: '#' }
+                    ]
+                },
+                {
+                    name: 'Linux',
+                    icon: <LinuxIcon size={48} strokeWidth={1} />,
+                    description: '通用发行版支持',
+                    downloads: [
+                        { label: 'x64 (AMD64)', hint: '通用桌面 / 服务器', link: '#' },
+                        { label: 'ARM64 (Aarch64)', hint: '树莓派 / 边缘计算设备', link: '#' }
+                    ]
+                }
+            ];
+
+            return (
+                <div className="pt-32 pb-20 px-6 min-h-screen bg-[#050505] animate-fade-in">
+                    <div className="max-w-5xl mx-auto">
+                        <button onClick={() => onNavigate('home')} className="mb-12 text-gray-500 hover:text-white flex items-center gap-2 text-sm font-medium transition-colors group">
+                            <ChevronRight className="rotate-180 group-hover:-translate-x-1 transition-transform" size={16} /> 返回首页
+                        </button>
+
+                        <div className="text-center mb-20">
+                            <h1 className="text-5xl md:text-6xl font-semibold tracking-tighter mb-6">
+                                获取 Catalytic
+                            </h1>
+                            <p className="text-xl text-gray-400">
+                                选择适合您生产环境的下载版本。
+                            </p>
+                        </div>
+
+                        <div className="grid md:grid-cols-3 gap-8 mb-20">
+                            {platforms.map((platform) => (
+                                <div key={platform.name} className="bg-[#111] border border-white/5 rounded-[40px] p-8 flex flex-col items-center text-center group hover:border-white/20 transition-all duration-500 shadow-2xl">
+                                    <div className="mb-8 text-gray-600 group-hover:text-white transition-colors duration-500 group-hover:scale-110 transform transition-transform">
+                                        {platform.icon}
+                                    </div>
+                                    <h3 className="text-2xl font-semibold mb-2">{platform.name}</h3>
+                                    <p className="text-xs text-gray-500 mb-8 h-8">{platform.description}</p>
+
+                                    <div className="w-full space-y-3">
+                                        {platform.downloads.map((dl) => (
+                                            <button key={dl.label} className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl text-left hover:bg-white hover:text-black transition-all group/btn">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <div className="text-sm font-semibold">{dl.label}</div>
+                                                        <div className="text-[10px] opacity-60 group-hover/btn:text-black/60 transition-colors uppercase tracking-wider">{dl.hint}</div>
+                                                    </div>
+                                                    <Download size={14} className="opacity-20 group-hover/btn:opacity-100" />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-12 bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 rounded-[40px] text-center">
+                            <h3 className="text-xl font-semibold mb-4">开发者预览版</h3>
+                            <p className="text-gray-500 text-sm max-w-xl mx-auto mb-10 leading-relaxed">
+                                SDK 开发包现已开放获取。包含完整接口定义、核心库二进制文件以及调试示例，助您快速构建适配插件。
+                            </p>
+                            <button className="px-8 py-3 bg-white text-black text-sm font-medium rounded-full hover:bg-gray-100 transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-2">
+                                <Box size={18} /> 获取 SDK 开发包
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('home'); // home, arch, download
+
+            useEffect(() => {
+                window.scrollTo(0, 0);
+            }, [view]);
+
+            return (
+                <div className="min-h-screen bg-black text-white font-sans selection:bg-white/30">
+                    {/* 导航 - 始终存在 */}
+                    <nav className="fixed top-0 w-full z-50 backdrop-blur-xl border-b border-white/[0.06] bg-black/70">
+                        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+                            <div
+                                onClick={() => setView('home')}
+                                className="flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity cursor-pointer group"
+                            >
+                                <ShieldCheck size={16} className="text-white group-hover:text-cyan-400 transition-colors" />
+                                <span className="text-sm font-medium tracking-tight">Catalytic</span>
+                            </div>
+                            <div className="hidden md:flex items-center gap-8 text-[11px] font-medium text-gray-400">
+                                <button onClick={() => setView('arch')} className={`hover:text-white transition-colors ${view === 'arch' ? 'text-white' : ''}`}>架构</button>
+                                <button onClick={() => setView('download')} className={`hover:text-white transition-colors ${view === 'download' ? 'text-white' : ''}`}>获取下载</button>
+                            </div>
+                            <button onClick={() => setView('download')} className="px-4 py-1.5 bg-white text-black text-[11px] font-medium rounded-full hover:bg-gray-200 transition-colors">
+                                下载
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* 视图切换 */}
+                    {view === 'home' && <LandingPage onNavigate={setView} />}
+                    {view === 'arch' && <ArchitecturePage onNavigate={setView} />}
+                    {view === 'download' && <DownloadPage onNavigate={setView} />}
+
+                    {/* Footer - 共享 */}
+                    <footer className="py-12 px-6 bg-black text-center border-t border-white/5">
+                        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center text-[11px] text-gray-600 font-medium">
+                            <span>Copyright © 2026 Catalytic Technology Inc.</span>
+                            <div className="flex gap-8 mt-4 md:mt-0">
+                                <a href="#" className="hover:text-gray-400 transition-colors">隐私政策</a>
+                                <a href="#" className="hover:text-gray-400 transition-colors">使用条款</a>
+                                <a href="#" className="hover:text-gray-400 transition-colors">销售政策</a>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
