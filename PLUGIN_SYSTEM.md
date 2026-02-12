@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.2.0 | Updated: 2026-02-10
+> SDK Version: 0.2.0 | Updated: 2026-02-13
 
 ## Overview
 
@@ -232,13 +232,17 @@ Service.StopAll();               // Stop all slots
 Service.Slot(0).Start();         // Start slot 0
 Service.Slot(0).Stop();          // Stop slot 0
 Service.Slot(0).SetSN("ABC");    // Set SN for slot 0
-Service.Slot(0).SetVariable("key", "\"value\"");  // Set context variable
+
+// Read variables (extracted by Engine steps)
+var voltage = Service.Slot(0).GetVariable("voltage");  // Returns JSON string or null
 
 // Per-slot events
 Service.Slot(0).TestStarted += () => { /* ... */ };
 Service.Slot(0).TestFinished += (passed, msg) => { /* ... */ };
 Service.Slot(0).StepFinished += (stepIndex, passed) => { /* ... */ };
 ```
+
+> **Note**: `SetVariable` is a no-op. Variables are managed by Engine steps (via parse rules) and read-only from the plugin side. Use `GetVariable` to read extracted values.
 
 ### IHostBridge (Host Must Implement)
 
@@ -255,8 +259,8 @@ public interface IHostBridge
     void SlotStart(int slotIndex);
     void SlotStop(int slotIndex);
     void SlotSetSN(int slotIndex, string sn);
-    void SlotSetVariable(int slotIndex, string name, string jsonValue);
-    string? SlotGetVariable(int slotIndex, string name);
+    void SlotSetVariable(int slotIndex, string name, string jsonValue);  // No-op (variables managed by Engine)
+    string? SlotGetVariable(int slotIndex, string name);  // Reads from Engine VariablePool
 
     // Event Subscription
     void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
@@ -268,6 +272,8 @@ public interface IHostBridge
 ```
 
 > **Note**: All `IHostBridge` methods may be called from any thread concurrently. Implementations must be thread-safe.
+>
+> **Implementation Detail**: Engine automatically resets all slot data (variables, step results, errors) when `SlotStart` is called, ensuring clean state for each test run.
 
 ---
 

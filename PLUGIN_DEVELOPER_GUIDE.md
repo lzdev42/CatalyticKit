@@ -1,6 +1,6 @@
 # Catalytic 插件开发指南 (v0.2)
 
-*(更新日期: 2026-02-10 | SDK 版本: 0.2.0)*
+*(更新日期: 2026-02-13 | SDK 版本: 0.2.0)*
 
 ---
 
@@ -286,8 +286,8 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 | `Service.Slot(0).Start()` | 启动指定 Slot 测试（非阻塞）|
 | `Service.Slot(0).Stop()` | 停止指定 Slot 测试（非阻塞）|
 | `Service.Slot(0).SetSN("ABC")` | 设置产品 SN |
-| `Service.Slot(0).SetVariable(name, json)` | 设置流程变量 |
-| `Service.Slot(0).GetVariable(name)` | 获取流程变量 |
+| `Service.Slot(0).SetVariable(name, json)` | ⚠️ 无实际效果（变量由 Engine 步骤管理）|
+| `Service.Slot(0).GetVariable(name)` | 获取 Engine 提取的流程变量（只读）|
 
 #### 事件监听
 
