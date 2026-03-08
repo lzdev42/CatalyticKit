@@ -41,6 +41,16 @@ public interface ISlot
     /// <param name="name">变量名</param>
     /// <returns>变量值 (JSON 字符串)，不存在返回 null</returns>
     string? GetVariable(string name);
+
+    /// <summary>
+    /// 获取本次（或上次）测试的完整步骤记录。
+    /// <para><b>建议在 <see cref="TestFinished"/> 事件的回调中调用</b>，此时引擎已保存完整的运行结果。</para>
+    /// </summary>
+    /// <returns>
+    /// 当前 Slot 的完整测试记录，含 SN 和每个步骤的测试结果。
+    /// 若数据不可用或发生错误则返回 null。
+    /// </returns>
+    TestRecord? GetTestHistory();
     
     // --- Events (Host -> 插件) ---
 

@@ -57,31 +57,44 @@ internal class SlotProxy : ISlot, ISlotEventHandler
         => _bridge.SlotSetVariable(Index, name, jsonValue);
     public string? GetVariable(string name)
         => _bridge.SlotGetVariable(Index, name);
+    public TestRecord? GetTestHistory()
+        => _bridge.SlotGetHistory(Index);
 
     // --- 事件分发 (由 Host 调用, snapshot + try-catch 保护) ---
 
-    void ISlotEventHandler.OnTestStarted()
+    public void OnTestStarted()
     {
         Action? handler;
-        lock (_eventLock) { handler = _testStarted; }
-        try { handler?.Invoke(); }
-        catch (Exception ex) { _bridge.ReportPluginError("slot-event", ex); }
+        lock (_eventLock) handler = _testStarted;
+        if (handler == null) return;
+        foreach (var d in handler.GetInvocationList())
+        {
+            try { ((Action)d)(); }
+            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
+        }
     }
 
-    void ISlotEventHandler.OnTestFinished(bool passed, string? message)
+    public void OnTestFinished(bool passed, string? errorMessage)
     {
         Action<bool, string?>? handler;
-        lock (_eventLock) { handler = _testFinished; }
-        try { handler?.Invoke(passed, message); }
-        catch (Exception ex) { _bridge.ReportPluginError("slot-event", ex); }
+        lock (_eventLock) handler = _testFinished;
+        if (handler == null) return;
+        foreach (var d in handler.GetInvocationList())
+        {
+            try { ((Action<bool, string?>)d)(passed, errorMessage); }
+            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
+        }
     }
 
-    void ISlotEventHandler.OnStepFinished(int stepIndex, bool passed)
+    public void OnStepFinished(int stepIndex, bool passed)
     {
         Action<int, bool>? handler;
-        lock (_eventLock) { handler = _stepFinished; }
-        try { handler?.Invoke(stepIndex, passed); }
-        catch (Exception ex) { _bridge.ReportPluginError("slot-event", ex); }
+        lock (_eventLock) handler = _stepFinished;
+        if (handler == null) return;
+        foreach (var d in handler.GetInvocationList())
+        {
+            try { ((Action<int, bool>)d)(stepIndex, passed); }
+            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
+        }
     }
 }
-

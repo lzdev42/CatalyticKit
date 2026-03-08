@@ -48,6 +48,14 @@ public interface IHostBridge
     /// </summary>
     string? SlotGetVariable(int slotIndex, string name);
 
+    /// <summary>
+    /// 获取指定 Slot 的完整测试历史记录。
+    /// 建议在 <see cref="ISlotEventHandler.OnTestFinished"/> 回调触发后调用，此时数据最完整。
+    /// </summary>
+    /// <param name="slotIndex">Slot 索引（0-based）</param>
+    /// <returns>完整的测试记录；若数据不可用或发生错误则返回 null</returns>
+    TestRecord? SlotGetHistory(int slotIndex);
+
     // --- Event Subscription ---
 
     /// <summary>

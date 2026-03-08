@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.2.0 | Updated: 2026-02-13
+> SDK Version: 0.3.0 | Updated: 2026-03-08
 
 ## Overview
 
@@ -236,6 +236,13 @@ Service.Slot(0).SetSN("ABC");    // Set SN for slot 0
 // Read variables (extracted by Engine steps)
 var voltage = Service.Slot(0).GetVariable("voltage");  // Returns JSON string or null
 
+// Get full test history after test completes (call in TestFinished handler)
+Service.Slot(0).TestFinished += (passed, _) =>
+{
+    var record = Service.Slot(0).GetTestHistory();  // Returns TestRecord? 
+    // record.Steps contains StepRecord list with IsTestItem, Check (strongly-typed), etc.
+};
+
 // Per-slot events
 Service.Slot(0).TestStarted += () => { /* ... */ };
 Service.Slot(0).TestFinished += (passed, msg) => { /* ... */ };
@@ -261,6 +268,7 @@ public interface IHostBridge
     void SlotSetSN(int slotIndex, string sn);
     void SlotSetVariable(int slotIndex, string name, string jsonValue);  // No-op (variables managed by Engine)
     string? SlotGetVariable(int slotIndex, string name);  // Reads from Engine VariablePool
+    TestRecord? SlotGetHistory(int slotIndex);  // Returns full typed test history; call after TestFinished
 
     // Event Subscription
     void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);

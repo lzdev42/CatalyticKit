@@ -1,6 +1,6 @@
 # Catalytic 插件开发指南 (v0.2)
 
-*(更新日期: 2026-02-13 | SDK 版本: 0.2.0)*
+*(更新日期: 2026-03-08 | SDK 版本: 0.3.0)*
 
 ---
 
@@ -288,6 +288,7 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 | `Service.Slot(0).SetSN("ABC")` | 设置产品 SN |
 | `Service.Slot(0).SetVariable(name, json)` | ⚠️ 无实际效果（变量由 Engine 步骤管理）|
 | `Service.Slot(0).GetVariable(name)` | 获取 Engine 提取的流程变量（只读）|
+| `Service.Slot(0).GetTestHistory()` | 获取本次测试完整记录（建议在 `TestFinished` 回调中调用）|
 
 #### 事件监听
 
@@ -599,6 +600,73 @@ byte[] data = { 0xAA, 0xBB, 0xCC };
 // 转带空格的 Hex 字符串 (高性能)
 string hex = data.ToHexStringWithSpaces(); // "AA BB CC"
 ```
+
+### 5.10 TestRecord（测试历史记录）
+
+调用 `Service.Slot(x).GetTestHistory()` 获取强类型的完整测试记录。建议只在 `TestFinished` 事件回调中调用。
+
+```csharp
+Service.Slot(0).TestFinished += (passed, _) =>
+{
+    var record = Service.Slot(0).GetTestHistory();
+    if (record == null) return;
+
+    Console.WriteLine($"SN: {record.Sn}");
+    foreach (var step in record.Steps)
+    {
+        if (!step.IsTestItem) continue; // 跳过辅助步骤
+        Console.WriteLine($"  [{step.StepName}] {(step.Passed ? "PASS" : "FAIL")} ({step.ElapsedMs}ms)");
+
+        // 按检查类型分发
+        switch (step.Check)
+        {
+            case CheckDetail.RangeCheck r:
+                Console.WriteLine($"    范围: {r.Min} ~ {r.Max}, 实测: {r.Actual}");
+                break;
+            case CheckDetail.Threshold t:
+                Console.WriteLine($"    阈值: {t.Operator} {t.ThresholdValue}, 实测: {t.Actual}");
+                break;
+            case CheckDetail.Contains c:
+                Console.WriteLine($"    包含: '{c.Substring}', 实际: '{c.Actual}'");
+                break;
+            case CheckDetail.Compare cmp:
+                Console.WriteLine($"    比较: A={cmp.ActualA} {cmp.Operator} B={cmp.ActualB}");
+                break;
+        }
+    }
+};
+```
+
+#### TestRecord 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Sn` | `string?` | 产品 SN（测试前通过 `SetSN` 设置）|
+| `Steps` | `IReadOnlyList<StepRecord>` | 按执行顺序排列的所有步骤结果 |
+
+#### StepRecord 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `StepId` | `int` | 步骤 ID |
+| `StepName` | `string` | 步骤名称（低代码脚本中配置）|
+| `Passed` | `bool` | 是否通过 |
+| `IsTestItem` | `bool` | 是否为测试项（false = 辅助步骤，可过滤）|
+| `ElapsedMs` | `uint` | 执行耗时（毫秒）|
+| `ResultSummary` | `string?` | 人类可读摘要，如 `"3.31 (>=3.0 && <=3.5) → PASS"` |
+| `FinalValue` | `string?` | 最终测量值（JSON，类型由解析规则决定）|
+| `Check` | `CheckDetail?` | 检查结果详情（强类型，见下表）|
+| `Variables` | `Dictionary<string, string>` | 本步骤提取的变量快照 |
+
+#### CheckDetail 子类型
+
+| 类型 | 字段 | 说明 |
+|---|---|---|
+| `RangeCheck` | `Min`, `Max`, `Actual` | 范围检查 |
+| `Threshold` | `Operator`, `ThresholdValue`, `Actual` | 阈值检查（如 `>=`）|
+| `Contains` | `Substring`, `Actual` | 字符串包含 |
+| `Compare` | `Operator`, `ActualA`, `ActualB` | 双变量比较 |
+| `Unknown` | `RawJson` | 未知模板（前向兼容）|
 
 ---
 
@@ -1198,7 +1266,8 @@ dotnet publish -c Release --self-contained false
 |------|------|
 | `CatalyticKit.dll` | SDK 动态库 |
 | `IPlugin.cs` | 插件接口定义 (`IPlugin` / `ICommunicator` / `IProcessor` / `IPluginContext`) |
-| `ISlot.cs` | Slot 操作接口 (命令 + 事件) |
+| `ISlot.cs` | Slot 操作接口 (命令 + 事件 + `GetTestHistory`) |
+| `TestRecord.cs` | 测试历史记录模型 (`TestRecord` / `StepRecord` / `CheckDetail`) |
 | `IHostBridge.cs` | Host 桥接接口 (Host 必须实现) |
 | `ISlotEventHandler.cs` | Slot 事件回调接口 |
 | `Service.cs` | 静态 Service 入口 (全局命令 + Slot 访问) |
@@ -1214,6 +1283,6 @@ dotnet publish -c Release --self-contained false
 
 ---
 
-> **文档版本**: 0.2.0  
-> **最后更新**: 2026-02-10  
-> **适用 SDK 版本**: 0.2.0+
+> **文档版本**: 0.3.0  
+> **最后更新**: 2026-03-08  
+> **适用 SDK 版本**: 0.3.0+
