@@ -276,6 +276,8 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 
 | 方法 | 说明 |
 |------|------|
+| `Service.GetSlotCount()` | 获取系统配置的总 Slot 数量 |
+| `Service.GetAllSlots()` | 获取系统中所有 Slot 对象数组，方便遍历 |
 | `Service.StartAll()` | 启动所有 Slot 的测试（非阻塞）|
 | `Service.StopAll()` | 停止所有 Slot 的测试（非阻塞）|
 

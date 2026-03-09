@@ -26,6 +26,35 @@ public static class Service
     // --- Global Commands ---
 
     /// <summary>
+    /// 获取系统配置的总 Slot 数量
+    /// </summary>
+    /// <returns>Slot 数量</returns>
+    /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
+    public static int GetSlotCount()
+    {
+        if (_bridge is not { } bridge)
+            throw new ServiceNotInitializedException();
+        return bridge.GetSlotCount();
+    }
+
+    /// <summary>
+    /// 获取当前系统中所有 Slot 的操作接口实例。
+    /// 可以方便地用于遍历操作所有通道。
+    /// </summary>
+    /// <returns>包含所有 ISlot 的数组</returns>
+    /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
+    public static ISlot[] GetAllSlots()
+    {
+        int count = GetSlotCount();
+        var slots = new ISlot[count];
+        for (int i = 0; i < count; i++)
+        {
+            slots[i] = Slot(i);
+        }
+        return slots;
+    }
+
+    /// <summary>
     /// 启动所有 Slot 的测试 (非阻塞)
     /// </summary>
     /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>

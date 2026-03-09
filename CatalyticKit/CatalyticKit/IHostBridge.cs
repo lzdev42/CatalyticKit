@@ -12,6 +12,11 @@ public interface IHostBridge
     // --- Global Commands (Plugin -> Host) ---
 
     /// <summary>
+    /// 获取当前 Host 配置的总 Slot 数量
+    /// </summary>
+    int GetSlotCount();
+
+    /// <summary>
     /// 启动所有 Slot 的测试 (非阻塞)
     /// </summary>
     void StartAll();
