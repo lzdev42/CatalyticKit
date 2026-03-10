@@ -61,6 +61,21 @@ public interface IHostBridge
     /// <returns>完整的测试记录；若数据不可用或发生错误则返回 null</returns>
     TestRecord? SlotGetHistory(int slotIndex);
 
+    // --- Step Level Commands (Plugin -> Host) ---
+
+    /// <summary>
+    /// 获取指定 Slot 当前所在步骤的上下文原数据
+    /// </summary>
+    StepContext? GetCurrentStep(int slotIndex);
+
+    /// <summary>
+    /// 向引擎原生接口主动提报当前步骤的执行结果
+    /// </summary>
+    /// <param name="slotIndex">Slot 索引</param>
+    /// <param name="passed">步骤是否判定为通过</param>
+    /// <param name="failReason">失败的具体原因，可通过时传 null</param>
+    void ReportStepResult(int slotIndex, bool passed, string? failReason);
+
     // --- Event Subscription ---
 
     /// <summary>

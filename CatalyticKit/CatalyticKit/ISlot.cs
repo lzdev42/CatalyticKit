@@ -1,4 +1,22 @@
+using System.Collections.Generic;
+
 namespace CatalyticKit;
+
+/// <summary>
+/// 表示当前执行步骤的上下文信息
+/// 包含步骤的标识、名称及反序列化后的参数集合
+/// </summary>
+public class StepContext
+{
+    /// <summary>步骤内部数字 ID</summary>
+    public int StepId { get; set; }
+    
+    /// <summary>步骤展示名称（如："机器回原点"）</summary>
+    public string StepName { get; set; } = "";
+    
+    /// <summary>步骤标识符/标签（如："WaitReady"），供代码侧进行 if/switch 判定</summary>
+    public string StepLabel { get; set; } = "";
+}
 
 /// <summary>
 /// 插件使用的 Slot 操作接口。
@@ -51,6 +69,22 @@ public interface ISlot
     /// 若数据不可用或发生错误则返回 null。
     /// </returns>
     TestRecord? GetTestHistory();
+
+    /// <summary>
+    /// 获取当前正在执行的步骤的完整上下文（已将 JSON 跨语言参数解析为强类型/字典）
+    /// </summary>
+    StepContext? GetCurrentStep();
+
+    /// <summary>
+    /// 报告当前步骤的业务逻辑为：通过 (Pass)
+    /// </summary>
+    void ReportPass();
+
+    /// <summary>
+    /// 报告当前步骤的业务逻辑为：失败 (Fail)
+    /// </summary>
+    /// <param name="reason">失败的具体原因</param>
+    void ReportFail(string reason);
     
     // --- Events (Host -> 插件) ---
 

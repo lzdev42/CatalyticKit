@@ -147,8 +147,7 @@ public interface IProcessor : IPlugin
     /// <summary>
     /// 执行处理逻辑
     /// </summary>
-    /// <param name="parametersJson">任务参数（JSON 格式）</param>
+    /// <param name="slotIndex">调用此插件的槽位索引</param>
     /// <param name="ct">取消令牌</param>
-    /// <returns>处理结果数据</returns>
-    Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct);
+    Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
