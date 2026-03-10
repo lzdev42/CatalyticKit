@@ -656,7 +656,7 @@ Service.Slot(0).TestFinished += (passed, _) =>
 | `IsTestItem` | `bool` | 是否为测试项（false = 辅助步骤，可过滤）|
 | `ElapsedMs` | `uint` | 执行耗时（毫秒）|
 | `ResultSummary` | `string?` | 人类可读摘要，如 `"3.31 (>=3.0 && <=3.5) → PASS"` |
-| `FinalValue` | `string?` | 最终测量值（JSON，类型由解析规则决定）|
+| `ResultValue` | `string?` | 最终测量结果的纯净格式（数字或非 JSON 转义字符串，类型由解析规则决定）|
 | `Check` | `CheckDetail?` | 检查结果详情（强类型，见下表）|
 | `Variables` | `Dictionary<string, string>` | 本步骤提取的变量快照 |
 

@@ -23,6 +23,9 @@ public static class Service
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
     }
 
+    private static IReadOnlyList<ISlot>? _allSlotsCache;
+    private static readonly object _slotsLock = new();
+
     // --- Global Commands ---
 
     /// <summary>
@@ -41,17 +44,27 @@ public static class Service
     /// 获取当前系统中所有 Slot 的操作接口实例。
     /// 可以方便地用于遍历操作所有通道。
     /// </summary>
-    /// <returns>包含所有 ISlot 的数组</returns>
+    /// <returns>包含所有 ISlot 的只读集合</returns>
     /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
-    public static ISlot[] GetAllSlots()
+    public static IReadOnlyList<ISlot> GetAllSlots()
     {
-        int count = GetSlotCount();
-        var slots = new ISlot[count];
-        for (int i = 0; i < count; i++)
+        if (_allSlotsCache != null)
+            return _allSlotsCache;
+
+        lock (_slotsLock)
         {
-            slots[i] = Slot(i);
+            if (_allSlotsCache != null)
+                return _allSlotsCache;
+
+            int count = GetSlotCount();
+            var slots = new ISlot[count];
+            for (int i = 0; i < count; i++)
+            {
+                slots[i] = Slot(i);
+            }
+            _allSlotsCache = slots;
+            return _allSlotsCache;
         }
-        return slots;
     }
 
     /// <summary>

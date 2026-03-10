@@ -67,12 +67,12 @@ public record StepRecord
     public string? ErrorMessage { get; init; }
 
     /// <summary>
-    /// 从设备响应中解析出的最终值（JSON 字符串）。
-    /// 该值的结构由开发者在低代码脚本中配置的解析规则（正则/数字提取）决定，
-    /// SDK 不对其结构做假设，插件若需使用请自行解析。
-    /// 例如：数值步骤为 <c>"3.31"</c>，字符串步骤为 <c>"\"OK\""</c>。
+    /// 从设备响应中解析出的最终测量结果值（纯净格式）。
+    /// 该值的结构由开发者在低代码脚本中配置的解析规则（正则/数字提取）决定。
+    /// 无论标量是字符串还是数字，都已自动被 SDK 解除 JSON 序列化包裹。
+    /// 例如：数值计算步骤将得到 <c>"3.31"</c> (可直接 double.Parse)，字符串提取步骤将得到 <c>"OK"</c> (不带双引号)。
     /// </summary>
-    public string? FinalValue { get; init; }
+    public string? ResultValue { get; init; }
 
     /// <summary>
     /// 检查结果详情。为 null 表示该步骤未配置检查规则（无检查步骤视为执行成功）。
