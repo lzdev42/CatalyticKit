@@ -61,6 +61,21 @@ public interface IHostBridge
     /// <returns>完整的测试记录；若数据不可用或发生错误则返回 null</returns>
     TestRecord? SlotGetHistory(int slotIndex);
 
+    /// <summary>
+    /// 获取当前已加载的测试流程定义（全量步骤静态配置，不依赖任何测试执行历史）。
+    /// 可在测试开始前调用，用于获取所有测试项的名称和检查上下限，以生成 CSV 报告表头等。
+    /// </summary>
+    /// <returns>完整的流程定义；若 Engine 尚未加载流程则返回 null</returns>
+    FlowDefinition? GetFlowDefinition();
+
+    /// <summary>
+    /// 获取报告输出目录的绝对路径（即工作目录下的 reports 子目录）。
+    /// 插件可将 CSV、PDF 等报告文件写入此目录。
+    /// 目录保证在 Host 启动时已创建。
+    /// </summary>
+    /// <returns>报告目录的绝对路径</returns>
+    string GetReportFolder();
+
     // --- Step Level Commands (Plugin -> Host) ---
 
     /// <summary>

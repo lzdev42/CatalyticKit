@@ -1,0 +1,10 @@
+{
+  "id": "catalytic.csv-reporter",
+  "name": "CSV Report Generator",
+  "version": "1.0.0",
+  "entry": "CsvReporter.dll",
+  "capabilities": {
+    "protocols": [],
+    "tasks": ["generate_csv_report"]
+  }
+}

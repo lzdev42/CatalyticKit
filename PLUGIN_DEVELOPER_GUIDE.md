@@ -1,6 +1,6 @@
 # Catalytic 插件开发指南 (v0.2)
 
-*(更新日期: 2026-03-08 | SDK 版本: 0.3.0)*
+*(更新日期: 2026-03-11 | SDK 版本: 0.4.1)*
 
 ---
 
@@ -280,6 +280,8 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 | `Service.GetAllSlots()` | 获取系统中所有 Slot 对象数组，方便遍历 |
 | `Service.StartAll()` | 启动所有 Slot 的测试（非阻塞）|
 | `Service.StopAll()` | 停止所有 Slot 的测试（非阻塞）|
+| `Service.GetFlowDefinition()` | **[NEW v0.4.1]** 获取全量步骤的静态定义（含上下限） |
+| `Service.ReportFolder()` | **[NEW v0.4.1]** 获取工作目录下的 `reports` 文件夹绝对路径 |
 
 #### 单 Slot 命令
 
@@ -466,12 +468,10 @@ public interface IProcessor : IPlugin
     /// <summary>
     /// 执行处理逻辑
     /// </summary>
-    /// <param name="parametersJson">任务参数（JSON 格式）
-    ///     示例: {"file_path": "/tmp/fw.bin", "baudrate": 115200}
-    /// </param>
+    /// <param name="slotIndex">当前 Slot 索引 (0-based)</param>
     /// <param name="ct">取消令牌，当测试被停止时会触发取消</param>
-    /// <returns>处理结果数据，将被 Engine 解析并存储为变量</returns>
-    Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct);
+    /// <returns>异步任务</returns>
+    Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
 ```
 
@@ -669,6 +669,51 @@ Service.Slot(0).TestFinished += (passed, _) =>
 | `Contains` | `Substring`, `Actual` | 字符串包含 |
 | `Compare` | `Operator`, `ActualA`, `ActualB` | 双变量比较 |
 | `Unknown` | `RawJson` | 未知模板（前向兼容）|
+
+### 5.11 FlowDefinition (流程定义) [NEW v0.4.1]
+
+`Service.GetFlowDefinition()` 返回当前已加载流程的静态配置。这不同于 `TestRecord`，它不包含实测值，但包含**所有**定义的步骤（即使因为之前的步骤失败而未执行的步骤）。
+
+常见用途：在测试开始前生成 CSV 报告表头，预填测试项及其上下限。
+
+```csharp
+var flow = Service.GetFlowDefinition();
+if (flow == null) return;
+
+foreach (var step in flow.Steps)
+{
+    if (!step.IsTestItem) continue;
+
+    Console.WriteLine($"测试项: {step.StepName} (Label: {step.StepLabel})");
+    
+    // 获取配置的检查规则
+    if (step.CheckRule is CheckRuleDefinition.RangeRule r)
+    {
+        Console.WriteLine($"  规则: 范围检查 [{r.Min}, {r.Max}]");
+    }
+}
+```
+
+#### FlowDefinition & StepDefinition 字段
+
+| 类型 | 字段 | 说明 |
+|---|---|---|
+| `FlowDefinition` | `Steps` | `IReadOnlyList<StepDefinition>` |
+| `StepDefinition` | `StepId` | 步骤唯一数字 ID |
+| | `StepName` | 步骤名称 |
+| | `StepLabel` | 步骤标签 (供逻辑判断) |
+| | `IsTestItem` | 是否为测试项 |
+| | `CheckRule` | `CheckRuleDefinition?` |
+
+#### CheckRuleDefinition 子类型
+
+| 类型 | 字段 | 说明 |
+|---|---|---|
+| `RangeRule` | `Min`, `Max` | 静态范围配置 |
+| `ThresholdRule` | `Operator`, `ThresholdValue` | 静态阈值配置 |
+| `ContainsRule` | `Substring` | 静态包含子串配置 |
+| `CompareRule` | `Operator` | 变量比较配置 |
+| `UnknownRule` | `RawJson` | 原始配置 JSON |
 
 ---
 
@@ -1268,6 +1313,7 @@ dotnet publish -c Release --self-contained false
 |------|------|
 | `CatalyticKit.dll` | SDK 动态库 |
 | `IPlugin.cs` | 插件接口定义 (`IPlugin` / `ICommunicator` / `IProcessor` / `IPluginContext`) |
+| `FlowDefinition.cs` | **[NEW v0.4.1]** 流程定义模型 (`FlowDefinition` / `StepDefinition` / `CheckRuleDefinition`) |
 | `ISlot.cs` | Slot 操作接口 (命令 + 事件 + `GetTestHistory`) |
 | `TestRecord.cs` | 测试历史记录模型 (`TestRecord` / `StepRecord` / `CheckDetail`) |
 | `IHostBridge.cs` | Host 桥接接口 (Host 必须实现) |
@@ -1285,6 +1331,6 @@ dotnet publish -c Release --self-contained false
 
 ---
 
-> **文档版本**: 0.3.0  
-> **最后更新**: 2026-03-08  
-> **适用 SDK 版本**: 0.3.0+
+> **文档版本**: 0.4.1  
+> **最后更新**: 2026-03-11  
+> **适用 SDK 版本**: 0.4.1+

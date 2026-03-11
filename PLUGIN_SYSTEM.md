@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.3.0 | Updated: 2026-03-08
+> SDK Version: 0.4.1 | Updated: 2026-03-11
 
 ## Overview
 
@@ -114,7 +114,7 @@ public interface IProcessor : IPlugin
 {
     string TaskName { get; }
     
-    Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct);
+    Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
 ```
 
@@ -233,6 +233,10 @@ Service.Slot(0).Start();         // Start slot 0
 Service.Slot(0).Stop();          // Stop slot 0
 Service.Slot(0).SetSN("ABC");    // Set SN for slot 0
 
+// Get global flow information [NEW v0.4.1]
+var flow = Service.GetFlowDefinition();   // Get all steps, limits, labels
+var folder = Service.ReportFolder();      // Get absolute path to {WorkDir}/reports
+
 // Read variables (extracted by Engine steps)
 var voltage = Service.Slot(0).GetVariable("voltage");  // Returns JSON string or null
 
@@ -269,6 +273,10 @@ public interface IHostBridge
     void SlotSetVariable(int slotIndex, string name, string jsonValue);  // No-op (variables managed by Engine)
     string? SlotGetVariable(int slotIndex, string name);  // Reads from Engine VariablePool
     TestRecord? SlotGetHistory(int slotIndex);  // Returns full typed test history; call after TestFinished
+    
+    // Global flow info [NEW v0.4.1]
+    FlowDefinition? GetFlowDefinition();
+    string GetReportFolder();
 
     // Event Subscription
     void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);

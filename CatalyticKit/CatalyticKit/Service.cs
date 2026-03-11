@@ -106,6 +106,31 @@ public static class Service
     }
 
     /// <summary>
+    /// 获取当前已加载的测试流程定义（全量步骤静态配置，不依赖任何测试执行历史）。
+    /// 可在测试开始前调用，用于获取所有测试项的名称和检查上下限，以生成 CSV 报告表头等。
+    /// </summary>
+    /// <returns>完整的流程定义；若 Engine 尚未加载流程则返回 null</returns>
+    /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
+    public static FlowDefinition? GetFlowDefinition()
+    {
+        if (_bridge is not { } bridge)
+            throw new ServiceNotInitializedException();
+        return bridge.GetFlowDefinition();
+    }
+
+    /// <summary>
+    /// 获取报告输出目录的绝对路径（即工作目录下的 reports 子目录）。
+    /// 插件可将 CSV、PDF 等报告文件写入此目录。
+    /// </summary>
+    /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
+    public static string ReportFolder()
+    {
+        if (_bridge is not { } bridge)
+            throw new ServiceNotInitializedException();
+        return bridge.GetReportFolder();
+    }
+
+    /// <summary>
     /// [Internal] 重置 Service 状态 (仅用于测试或 Host 重启)
     /// </summary>
     internal static void Reset()
