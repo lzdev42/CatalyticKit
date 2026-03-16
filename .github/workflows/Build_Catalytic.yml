@@ -192,7 +192,7 @@ jobs:
       # ===
       - name: Upload Build Artifact (macOS/Linux)
         if: matrix.platform != 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload Build Artifact (Windows)
         if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*.zip
@@ -234,7 +234,7 @@ jobs:
         shell: bash
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-artifacts
 
