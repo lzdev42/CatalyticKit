@@ -125,7 +125,7 @@ jobs:
           java-version: '25'
           distribution: 'jetbrains'
           cache: 'gradle'
-          # token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           env:
           GITHUB_TOKEN: ${{ secrets.GH_DOTCOM_TOKEN }} 
 
