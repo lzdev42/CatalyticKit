@@ -1,4 +1,4 @@
-# Catalytic 插件开发指南 (v0.2)
+# Catalytic 插件开发指南 (v0.4.1)
 
 *(更新日期: 2026-03-11 | SDK 版本: 0.4.1)*
 
@@ -24,14 +24,14 @@
 
 ### 什么是 Catalytic 插件？
 
-Catalytic 采用模块化插件架构。**所有与硬件交互的功能都通过插件实现。** 无论是串口通讯、TCP Socket，还是固件烧录、校准算法，本质上都是 Catalytic 的插件。
+Catalytic 采用模块化插件架构。**所有与硬件交互或自定义业务逻辑的功能都通过插件实现。** 无论是基础的通讯协议支持，还是特定产品的测试流程扩展，其核心都是插件。
 
 ### 插件的两种类型
 
 | 类型 | 接口 | 用途 | 典型场景 |
 |------|------|------|----------|
 | **通讯器** | `ICommunicator` | 底层设备通讯 | 串口、TCP、VISA、Modbus |
-| **处理器** | `IProcessor` | 复杂业务逻辑 | 固件烧录、产品校准、数据分析 |
+| **处理器** | `IProcessor` | 扩展自定义逻辑 | 由开发者定义的任何功能扩展 |
 
 ### 为什么使用插件？
 
@@ -114,7 +114,7 @@ dotnet add package CatalyticKit
     "entry": "MyFirstPlugin.dll",
     "capabilities": {
         "protocols": ["demo"],
-        "tasks": []
+        "tasks": ["my-custom-task"]
     }
 }
 ```
@@ -459,9 +459,8 @@ public class ExecuteOptions
 public interface IProcessor : IPlugin
 {
     /// <summary>
-    /// 该处理器支持的任务名称
-    /// 例如 "burn_firmware"、"calibrate"、"analyze_data"
-    /// 此名称用于 UI 中配置 Host 任务
+    /// 该处理器支持的任务名称。
+    /// 此名称用于在低代码脚本或配置文件中引用。
     /// </summary>
     string TaskName { get; }
     

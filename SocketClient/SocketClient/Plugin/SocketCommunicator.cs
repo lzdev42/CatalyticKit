@@ -7,10 +7,7 @@ namespace SocketClient.Plugin;
 /// <summary>
 /// 插件业务异常，用于替代系统级的 InvalidOperationException
 /// </summary>
-public sealed class SocketPluginException : Exception
-{
-    public SocketPluginException(string message) : base(message) { }
-}
+public sealed class SocketPluginException(string message) : Exception(message);
 
 /// <summary>
 /// 通用 Socket 插件适配器

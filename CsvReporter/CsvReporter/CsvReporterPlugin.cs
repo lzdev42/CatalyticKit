@@ -1,27 +1,22 @@
 using CatalyticKit;
+using System.Text;
 
 namespace CsvReporter;
 
 /// <summary>
-/// CSV 报告生成器插件
+/// CSV 报告生成器插件 (标准横向宽表 - 按天汇总追加)
 /// 演示 IProcessor 与 SDK v0.4.1 GetFlowDefinition / GetTestHistory 能力
-/// 
-/// 工作模式（扩展/Extension/HostControlled）：
-///   1. ActivateAsync 时，通过 Service.GetFlowDefinition() 构建 CSV 表头（测试项名称 + 上下限）
-///   2. ExecuteAsync (IProcessor) 由 Host 在扩展步骤触发后调用：
-///      读取当前 Slot 的测试历史，生成 CSV 数据行后写入文件，并 ReportPass。
 /// </summary>
 public class CsvReporterPlugin : IProcessor
 {
     private IPluginContext? _context;
-
-    // CSV 输出目录，在 ActivateAsync 时从 Service.ReportFolder() 获取
     private string _outputDir = "";
-
-    // 流程定义快照（在 ActivateAsync 时获取一次，作为表头基准）
     private IReadOnlyList<StepDefinition>? _testItems;
 
-    public string Id    => "catalytic.csv-reporter";
+    // 静态文件锁：确保多 Slot 并发完成时，排队安全地追加写入同一个 CSV
+    private static readonly SemaphoreSlim _fileWriteLock = new SemaphoreSlim(1, 1);
+
+    public string Id    => "catalytic.csv-reporter-daily";
     public string TaskName => "generate_csv_report";
 
     // ──────────────────────────────────────────────
@@ -33,11 +28,9 @@ public class CsvReporterPlugin : IProcessor
         _context = context;
         _context.Log(LogLevel.Info, "[CsvReporter] Plugin activated.");
 
-        // 使用 Host 配置的报告目录
         _outputDir = Service.ReportFolder();
         Directory.CreateDirectory(_outputDir);
 
-        // 获取流程定义，缓存所有测试项（IsTestItem == true）
         try
         {
             var flow = Service.GetFlowDefinition();
@@ -46,12 +39,11 @@ public class CsvReporterPlugin : IProcessor
             if (_testItems is { Count: > 0 })
                 _context.Log(LogLevel.Info, $"[CsvReporter] 已加载流程定义，共 {_testItems.Count} 个测试项。");
             else
-                _context.Log(LogLevel.Warning, "[CsvReporter] 流程定义为空或 Engine 尚未加载流程，CSV 表头将在执行时动态生成。");
+                _context.Log(LogLevel.Warning, "[CsvReporter] 流程定义为空，CSV 表头将在执行时动态生成。");
         }
         catch (ServiceNotInitializedException)
         {
-            // Host 初始化期间可能 Service 未就绪，不阻断激活
-            _context.Log(LogLevel.Warning, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取流程定义。");
+            _context.Log(LogLevel.Warning, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取。");
         }
 
         return Task.CompletedTask;
@@ -64,17 +56,16 @@ public class CsvReporterPlugin : IProcessor
     }
 
     // ──────────────────────────────────────────────
-    // IProcessor — 由 Host 在 Extension 步骤时调用
+    // IProcessor 
     // ──────────────────────────────────────────────
 
     public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
     {
         var slot = Service.Slot(slotIndex);
-        _context?.Log(LogLevel.Info, $"[CsvReporter] 开始为 Slot {slotIndex} 生成 CSV 报告...");
+        _context?.Log(LogLevel.Info, $"[CsvReporter] 开始为 Slot {slotIndex} 生成横向 CSV 报告...");
 
         try
         {
-            // 1. 延迟获取流程定义（若 ActivateAsync 时未能获取）
             if (_testItems == null)
             {
                 var flow = Service.GetFlowDefinition();
@@ -83,74 +74,74 @@ public class CsvReporterPlugin : IProcessor
 
             ct.ThrowIfCancellationRequested();
 
-            // 2. 获取本次测试历史
             var history = slot.GetTestHistory();
             if (history == null)
             {
                 _context?.Log(LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} 无测试历史，跳过写入。");
-                slot.ReportPass(); // 没有数据不算失败
+                slot.ReportPass(); 
                 return;
             }
 
             ct.ThrowIfCancellationRequested();
 
-            // 3. 生成 CSV
-            var csvPath = BuildCsvPath(slotIndex, history.Sn);
-            await WriteCsvAsync(csvPath, slotIndex, history, ct);
+            // 按天生成文件名
+            var csvPath = BuildDailyCsvPath();
+            
+            // 执行带锁的追加写入
+            await AppendToCsvAsync(csvPath, history, ct);
 
-            _context?.Log(LogLevel.Info, $"[CsvReporter] CSV 已写入: {csvPath}");
+            _context?.Log(LogLevel.Info, $"[CsvReporter] 数据已追加至宽表 CSV: {csvPath}");
             slot.ReportPass();
         }
         catch (OperationCanceledException)
         {
-            _context?.Log(LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} CSV 生成被取消。");
-            throw; // 取消直接抛出，不 ReportFail
+            _context?.Log(LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} CSV 写入被取消。");
+            throw; 
         }
         catch (Exception ex)
         {
-            _context?.Log(LogLevel.Error, $"[CsvReporter] Slot {slotIndex} CSV 生成失败: {ex.Message}");
-            slot.ReportFail($"CSV 生成异常: {ex.Message}");
+            _context?.Log(LogLevel.Error, $"[CsvReporter] Slot {slotIndex} CSV 写入失败: {ex.Message}");
+            slot.ReportFail($"CSV 写入异常: {ex.Message}");
         }
     }
 
     // ──────────────────────────────────────────────
-    // CSV 生成逻辑
+    // CSV 宽表追加逻辑 (线程安全)
     // ──────────────────────────────────────────────
 
-    private async Task WriteCsvAsync(string path, int slotIndex, TestRecord history, CancellationToken ct)
+    private async Task AppendToCsvAsync(string path, TestRecord history, CancellationToken ct)
     {
         // 建立 stepId → StepRecord 的快速查找表
         var resultMap = history.Steps
             .Where(s => s.IsTestItem)
             .ToDictionary(s => s.StepId);
 
-        var lines = new List<string>();
-
-        // ── 表头 ──────────────────────────────────────
-        // SN,SlotIndex,Timestamp,StepName,Lower,Upper,Measured,Result
-        lines.Add("SN,SlotIndex,Timestamp,StepName,Lower,Upper,Measured,Result");
-
-        // ── 元信息行 ──────────────────────────────────
-        var sn        = EscapeCsv(history.Sn ?? "N/A");
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-        // 以流程定义为模板，确保每个测试项都有一行（即使该步骤未执行也输出占位行）
         var templateItems = _testItems ?? [];
 
-        // 若流程定义为空则退化：只输出实际执行过的测试项
         if (templateItems.Count == 0)
+        {
             templateItems = history.Steps.Where(s => s.IsTestItem)
                                          .Select(s => new StepDefinition { StepId = s.StepId, StepName = s.StepName, IsTestItem = true })
                                          .ToList();
+        }
 
+        var headerRow = new List<string> { "SN", "Result" };
+        var upperRow  = new List<string> { "Upper Limit", "--" };
+        var lowerRow  = new List<string> { "Lower Limit", "--" };
+        
+        var sn = EscapeCsv(history.Sn ?? "N/A");
+        var dataRow = new List<string> { sn };
+
+        bool isOverallPass = true; 
+
+        // 1. 拼装数据与表头结构
         foreach (var def in templateItems)
         {
             ct.ThrowIfCancellationRequested();
 
-            string lower   = "";
-            string upper   = "";
+            string lower = "";
+            string upper = "";
 
-            // 从流程定义提取上下限
             if (def.CheckRule is CheckRuleDefinition.RangeRule range)
             {
                 lower = range.Min.ToString("G");
@@ -158,38 +149,72 @@ public class CsvReporterPlugin : IProcessor
             }
             else if (def.CheckRule is CheckRuleDefinition.ThresholdRule thr)
             {
-                lower = $"{thr.Operator} {thr.ThresholdValue:G}";
-                upper = "";
+                if (thr.Operator.Contains("<")) 
+                    upper = thr.ThresholdValue.ToString("G");
+                else if (thr.Operator.Contains(">")) 
+                    lower = thr.ThresholdValue.ToString("G");
+                else 
+                    lower = $"{thr.Operator}{thr.ThresholdValue:G}"; 
             }
 
-            // 从执行历史提取实测值和结果
             string measured = "";
-            string result   = "NOT_RUN";
-
             if (resultMap.TryGetValue(def.StepId, out var rec))
             {
                 measured = EscapeCsv(rec.ResultValue ?? "");
-                result   = rec.Passed ? "PASS" : "FAIL";
+                if (!rec.Passed) isOverallPass = false;
 
-                // 若流程定义里没有上下限，尝试从运行结果补充
-                if (string.IsNullOrEmpty(lower) && rec.Check is CheckDetail.RangeCheck rc)
+                if (string.IsNullOrEmpty(lower) && string.IsNullOrEmpty(upper) && rec.Check is CheckDetail.RangeCheck rc)
                 {
                     lower = rc.Min.ToString("G");
                     upper = rc.Max.ToString("G");
                 }
             }
+            else
+            {
+                isOverallPass = false;
+            }
 
-            lines.Add($"{sn},{slotIndex},{EscapeCsv(timestamp)},{EscapeCsv(def.StepName)},{lower},{upper},{measured},{result}");
+            headerRow.Add(EscapeCsv(def.StepName));
+            upperRow.Add(EscapeCsv(upper));
+            lowerRow.Add(EscapeCsv(lower));
+            dataRow.Add(measured);
         }
 
-        await File.WriteAllLinesAsync(path, lines, System.Text.Encoding.UTF8, ct);
+        dataRow.Insert(1, isOverallPass ? "PASS" : "FAIL");
+
+        // 2. 加锁进行文件 IO 操作
+        await _fileWriteLock.WaitAsync(ct);
+        try
+        {
+            bool isNewFile = !File.Exists(path);
+            var linesToWrite = new List<string>();
+
+            // 如果文件是今天刚创建的（不存在），先把前 3 行（表头、上限、下限）写进去
+            if (isNewFile)
+            {
+                linesToWrite.Add(string.Join(",", headerRow));
+                linesToWrite.Add(string.Join(",", upperRow));
+                linesToWrite.Add(string.Join(",", lowerRow));
+            }
+            
+            // 永远追加当前设备的数据行（第 4 行及以后）
+            linesToWrite.Add(string.Join(",", dataRow));
+
+            // AppendAllLinesAsync：如果文件不存在会先创建，存在则在末尾追加
+            await File.AppendAllLinesAsync(path, linesToWrite, Encoding.UTF8, ct);
+        }
+        finally
+        {
+            // 释放锁，允许下一个 Slot 写入
+            _fileWriteLock.Release();
+        }
     }
 
-    private string BuildCsvPath(int slotIndex, string? sn)
+    // 按天生成文件名，例如：Report_20260313.csv
+    private string BuildDailyCsvPath()
     {
-        var safeSn   = string.IsNullOrWhiteSpace(sn) ? "no_sn" : sn.Replace("/", "-").Replace("\\", "-");
-        var ts       = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var fileName = $"slot{slotIndex}_{safeSn}_{ts}.csv";
+        var dateStr = DateTime.Now.ToString("yyyyMMdd");
+        var fileName = $"DailyReport_{dateStr}.csv";
         return Path.Combine(_outputDir, fileName);
     }
 

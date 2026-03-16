@@ -19,9 +19,9 @@ catalytic/
     ├── acme.modbus-driver/
     │   ├── manifest.json
     │   └── ModbusDriver.dll
-    └── vendor.firmware-burner/
+    └── my-company.custom-logic/
         ├── manifest.json
-        └── FirmwareBurner.dll
+        └── CustomLogic.dll
 ```
 
 **Rules:**
@@ -107,7 +107,7 @@ public class ExecuteOptions
 }
 ```
 
-### IProcessor (For HostControlled Mode)
+### IProcessor
 
 ```csharp
 public interface IProcessor : IPlugin
@@ -331,7 +331,7 @@ Yes. Declare both in `capabilities`:
 {
     "capabilities": {
         "protocols": ["scpi"],
-        "tasks": ["calibrate", "self_test"]
+        "tasks": ["my_extension"]
     }
 }
 ```
