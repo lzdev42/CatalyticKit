@@ -5,16 +5,16 @@ namespace CatalyticKit;
 /// 命令转发给 IHostBridge，事件由 Host 通过 ISlotEventHandler 回调触发。
 /// 
 /// 线程安全：
-/// - 事件订阅/取消订阅：lock 保护
-/// - 事件触发：snapshot 模式（锁内取 delegate 快照，锁外 invoke，不会死锁）
-/// - 事件回调异常：try-catch 保护，不让插件的回调炸掉 Host
+/// - 事件订阅/取消订阅：lock 锁保护
+/// - 事件触发：快照模式（锁内取委托快照，锁外执行，避免死锁）
+/// - 事件回调异常：try-catch 保护，防止插件回调异常影响 Host 稳定性
 /// </summary>
 internal class SlotProxy : ISlot, ISlotEventHandler
 {
     private readonly IHostBridge _bridge;
     private readonly object _eventLock = new();
 
-    // 私有 delegate 字段 (由 lock 保护)
+    // 私有委托字段 (由 lock 锁保护)
     private Action? _testStarted;
     private Action<bool, string?>? _testFinished;
     private Action<int, bool>? _stepFinished;
@@ -66,7 +66,7 @@ internal class SlotProxy : ISlot, ISlotEventHandler
     public void ReportFail(string reason)
         => _bridge.ReportStepResult(Index, false, reason);
 
-    // --- 事件分发 (由 Host 调用, snapshot + try-catch 保护) ---
+    // --- 事件分发 (由 Host 调用, 快照机制 + try-catch 保护) ---
 
     public void OnTestStarted()
     {

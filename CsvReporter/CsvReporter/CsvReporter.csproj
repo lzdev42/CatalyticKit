@@ -8,8 +8,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- <ProjectReference Include="../../CatalyticKit/CatalyticKit/CatalyticKit.csproj" /> -->
-        <PackageReference Include="CatalyticKit" Version="*" />
+        <PackageReference Include="CatalyticKit" Version="*" PrivateAssets="All" ExcludeAssets="Runtime" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="manifest.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

@@ -73,7 +73,7 @@ public sealed class GenSocketClient : IDisposable
     {
         _isRunning = false;
         try { _stream?.Dispose(); } catch { }
-        try { _client?.Close(); } catch { } // dispose tcpclient
+        try { _client?.Close(); } catch { } // 释放 TcpClient
         _client = null;
         _stream = null;
         
@@ -152,7 +152,7 @@ public sealed class GenSocketClient : IDisposable
         {
             if (terminator == null)
             {
-                // 无 terminator：收到任意数据即返回
+                // 无结束符：收到任意数据即返回
                 if (!_buffer.IsEmpty)
                 {
                     return ReadAll();
@@ -246,14 +246,14 @@ public sealed class GenSocketClient : IDisposable
                 } 
                 catch (Exception ex) 
                 { 
-                    Debug.WriteLine($"Error in DataReceived handler: {ex}"); 
+                    Debug.WriteLine($"数据接收回调处理异常: {ex}"); 
                 }
             }
         }
         catch (Exception ex)
         {
-            // Log error
-            Debug.WriteLine($"Socket loop error: {ex.Message}");
+            // 记录错误
+            Debug.WriteLine($"Socket 接收循环异常: {ex.Message}");
             if (_isRunning) Disconnect();
         }
     }

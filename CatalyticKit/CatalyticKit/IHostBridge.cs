@@ -9,7 +9,7 @@ namespace CatalyticKit;
 /// </summary>
 public interface IHostBridge
 {
-    // --- Global Commands (Plugin -> Host) ---
+    // --- 全局命令 (从插件到 Host) ---
 
     /// <summary>
     /// 获取当前 Host 配置的总 Slot 数量
@@ -26,7 +26,7 @@ public interface IHostBridge
     /// </summary>
     void StopAll();
 
-    // --- Slot Commands (Plugin -> Host) ---
+    // --- Slot (槽位) 命令 (从插件到 Host) ---
 
     /// <summary>
     /// 启动指定 Slot 的测试 (非阻塞)
@@ -76,7 +76,7 @@ public interface IHostBridge
     /// <returns>报告目录的绝对路径</returns>
     string GetReportFolder();
 
-    // --- Step Level Commands (Plugin -> Host) ---
+    // --- 步骤级命令 (从插件到 Host) ---
 
     /// <summary>
     /// 获取指定 Slot 当前所在步骤的上下文原数据
@@ -91,7 +91,7 @@ public interface IHostBridge
     /// <param name="failReason">失败的具体原因，可通过时传 null</param>
     void ReportStepResult(int slotIndex, bool passed, string? failReason);
 
-    // --- Event Subscription ---
+    // --- 事件订阅 ---
 
     /// <summary>
     /// 订阅指定 Slot 的事件 (Host 通过 handler 回调通知插件)
@@ -103,7 +103,7 @@ public interface IHostBridge
     /// </summary>
     void UnsubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
 
-    // --- Error Reporting ---
+    // --- 错误提报 ---
 
     /// <summary>
     /// 上报插件错误。

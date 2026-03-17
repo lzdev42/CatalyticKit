@@ -26,7 +26,7 @@ public class CsvReporterPlugin : IProcessor
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "[CsvReporter] Plugin activated.");
+        _context.Log(LogLevel.Info, "[CsvReporter] 插件已激活。");
 
         _outputDir = Service.ReportFolder();
         Directory.CreateDirectory(_outputDir);
@@ -51,7 +51,7 @@ public class CsvReporterPlugin : IProcessor
 
     public Task DeactivateAsync()
     {
-        _context?.Log(LogLevel.Info, "[CsvReporter] Plugin deactivated.");
+        _context?.Log(LogLevel.Info, "[CsvReporter] 插件已停用。");
         return Task.CompletedTask;
     }
 
@@ -125,9 +125,9 @@ public class CsvReporterPlugin : IProcessor
                                          .ToList();
         }
 
-        var headerRow = new List<string> { "SN", "Result" };
-        var upperRow  = new List<string> { "Upper Limit", "--" };
-        var lowerRow  = new List<string> { "Lower Limit", "--" };
+        var headerRow = new List<string> { "序列号(SN)", "测试结果" };
+        var upperRow  = new List<string> { "上限值", "--" };
+        var lowerRow  = new List<string> { "下限值", "--" };
         
         var sn = EscapeCsv(history.Sn ?? "N/A");
         var dataRow = new List<string> { sn };

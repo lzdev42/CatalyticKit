@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using CatalyticKit;
 using SocketClient.Core;
 
@@ -18,16 +19,19 @@ public class SocketCommunicator : ICommunicator
     private IPluginContext? _context;
     
     // 管理多路连接: Key = "IP:Port"
-    // 使用线程安全字典，确保 Slot 隔离
     private readonly ConcurrentDictionary<string, GenSocketClient> _clients = new();
 
+    // 管理地址级并发锁: Key = "IP:Port"
+    // 确保同一个地址的 Connect/Send/Read/Disconnect 在多 Slot 间互斥排队
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _addressLocks = new();
+
     public string Id => "catalytic.socket-client";
-    public string Protocol => "tcp"; // 虽叫 tcp，但也支持 udp (未来)，目前 manifest 里写了 protocols: ["tcp", "udp"]
+    public string Protocol => "tcp";
 
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "Generic Socket Client Plugin Activated");
+        _context.Log(LogLevel.Info, "通用 Socket 客户端插件 (线程安全版) 已激活");
         return Task.CompletedTask;
     }
 
@@ -38,72 +42,32 @@ public class SocketCommunicator : ICommunicator
             client.Dispose();
         }
         _clients.Clear();
-        _context?.Log(LogLevel.Info, "Generic Socket Client Plugin Deactivated");
+
+        foreach (var semaphore in _addressLocks.Values)
+        {
+            try { semaphore.Dispose(); } catch { }
+        }
+        _addressLocks.Clear();
+
+        _context?.Log(LogLevel.Info, "通用 Socket 客户端插件已停用");
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// 核心执行方法 (Thread-Safe, Non-blocking)
+    /// 核心执行方法 (Thread-Safe)
     /// </summary>
     public async Task<byte[]> ExecuteAsync(
-        string address, 
-        string action, 
-        byte[] payload, 
-        int timeoutMs, 
+        string address,
+        string action,
+        byte[] payload,
+        int timeoutMs,
         CancellationToken ct)
     {
-        try
-        {
-            // 1. 尝试解析为标准 CommAction
-            if (Enum.TryParse<CommAction>(action, true, out var commAction))
-            {
-                switch (commAction)
-                {
-                    case CommAction.Connect:
-                        return await HandleConnect(address, timeoutMs);
-                    
-                    case CommAction.Disconnect:
-                        return await HandleDisconnect(address);
-                    
-                    case CommAction.Send:
-                        return await HandleSend(address, payload);
-                    
-                    case CommAction.Read:
-                        return await HandleRead(address);
-                    
-                    case CommAction.Query:
-                        await HandleSend(address, payload);
-                        return await HandleWait(address, timeoutMs, null, ct);
-    
-                    case CommAction.Status:
-                        var client = GetClientOrThrow(address);
-                        return client.IsConnected ? "1"u8.ToArray() : "0"u8.ToArray();
-                }
-            }
-            
-            throw new ArgumentException($"Unsupported action: {action}");
-        }
-        catch (OperationCanceledException)
-        {
-            // 正常取消或超时（如果 GenSocketClient 抛出 TimeoutException，会走下面 Exception catch? 不，TimeoutException 是 Exception）
-            // 如果是用户取消，不 Log Error
-            throw;
-        }
-        catch (TimeoutException ex)
-        {
-             _context?.Log(LogLevel.Warning, $"[{Id}] Action '{action}' on {address} timed out: {ex.Message}");
-             throw; // Host 会处理为 SubmitTimeout
-        }
-        catch (Exception ex)
-        {
-            // 记录详细上下文，防止 Host 吞掉细节
-            _context?.Log(LogLevel.Error, $"[{Id}] Action '{action}' on {address} failed: {ex.Message}");
-            throw; // 重新抛出，让 Host 提交 SubmitError
-        }
+        return await ExecuteAsync(address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
     }
 
     /// <summary>
-    /// 执行通讯动作（带高级选项）
+    /// 执行通讯动作（带高级选项，全量加锁保护）
     /// </summary>
     public async Task<byte[]> ExecuteAsync(
         string address,
@@ -112,6 +76,15 @@ public class SocketCommunicator : ICommunicator
         ExecuteOptions options,
         CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(address))
+            throw new ArgumentException("地址不能为空");
+
+        // 1. 获取该地址的专用信号量
+        var semaphore = _addressLocks.GetOrAdd(address, _ => new SemaphoreSlim(1, 1));
+
+        // 2. 获取锁 (排队时间受 CancellationToken 控制，不占用 options.TimeoutMs)
+        await semaphore.WaitAsync(ct);
+
         try
         {
             if (Enum.TryParse<CommAction>(action, true, out var commAction))
@@ -119,28 +92,42 @@ public class SocketCommunicator : ICommunicator
                 switch (commAction)
                 {
                     case CommAction.Connect:
-                        return await HandleConnect(address, options.TimeoutMs);
-                    
+                        return await HandleConnectInternal(address, options.TimeoutMs);
+
                     case CommAction.Disconnect:
-                        return await HandleDisconnect(address);
-                    
+                        return HandleDisconnectInternal(address);
+
                     case CommAction.Send:
-                        return await HandleSend(address, payload);
-                    
+                        var sendClient = GetClientOrThrow(address);
+                        sendClient.ReadAll(); // 补丁：发送前清理上一 Slot 可能遗留的脏数据
+                        await sendClient.SendAsync(payload);
+                        _context?.Log(LogLevel.Debug, $"[{address}] 已发送: {payload.ToHexStringWithSpaces()}");
+                        return Array.Empty<byte>();
+
                     case CommAction.Read:
-                        return await HandleRead(address);
-                    
+                        var readClient = GetClientOrThrow(address);
+                        var data = readClient.ReadAll();
+                        if (data.Length > 0)
+                            _context?.Log(LogLevel.Debug, $"[{address}] 已读取: {data.ToHexStringWithSpaces()}");
+                        return data;
+
                     case CommAction.Query:
-                        await HandleSend(address, payload);
-                        return await HandleWait(address, options.TimeoutMs, options.Terminator, ct); 
-    
+                        var queryClient = GetClientOrThrow(address);
+                        queryClient.ReadAll(); // 补丁：Query 前物理清空缓冲区
+                        await queryClient.SendAsync(payload);
+                        _context?.Log(LogLevel.Debug, $"[{address}] 已发送 (Query): {payload.ToHexStringWithSpaces()}");
+                        
+                        var response = await queryClient.WaitAsync(options.TimeoutMs == 0 ? -1 : options.TimeoutMs, options.Terminator, ct);
+                        _context?.Log(LogLevel.Debug, $"[{address}] 已接收 (Query): {response.ToHexStringWithSpaces()}");
+                        return response;
+
                     case CommAction.Status:
-                        var client = GetClientOrThrow(address);
-                        return client.IsConnected ? "1"u8.ToArray() : "0"u8.ToArray();
+                        bool connected = _clients.TryGetValue(address, out var c) && c.IsConnected;
+                        return connected ? "1"u8.ToArray() : "0"u8.ToArray();
                 }
             }
-            
-            throw new ArgumentException($"Unsupported action: {action}");
+
+            throw new ArgumentException($"不支持的动作类型: {action}");
         }
         catch (OperationCanceledException)
         {
@@ -148,93 +135,70 @@ public class SocketCommunicator : ICommunicator
         }
         catch (TimeoutException ex)
         {
-             _context?.Log(LogLevel.Warning, $"[{Id}] Action '{action}' on {address} timed out: {ex.Message}");
-             throw;
+            _context?.Log(LogLevel.Warning, $"[{Id}] 在地址 {address} 执行动作 '{action}' 超时: {ex.Message}");
+            throw;
         }
         catch (Exception ex)
         {
-            _context?.Log(LogLevel.Error, $"[{Id}] Action '{action}' on {address} failed: {ex.Message}");
+            _context?.Log(LogLevel.Error, $"[{Id}] 在地址 {address} 执行动作 '{action}' 失败: {ex.Message}");
             throw;
+        }
+        finally
+        {
+            semaphore.Release();
         }
     }
 
-    private async Task<byte[]> HandleConnect(string address, int timeoutMs)
+    // --- 内部处理方法 ---
+
+    private async Task<byte[]> HandleConnectInternal(string address, int timeoutMs)
     {
         if (_clients.TryGetValue(address, out var existing) && existing.IsConnected)
         {
-            _context?.Log(LogLevel.Info, $"[{address}] Already connected");
+            _context?.Log(LogLevel.Info, $"[{address}] 设备已处于连接状态");
             return Array.Empty<byte>();
         }
 
-        // 解析 IP:Port
         if (!TryParseAddress(address, out var host, out var port))
-            throw new ArgumentException($"Invalid address format: {address}. Expected IP:Port");
+            throw new ArgumentException($"地址格式错误: {address}。应为 IP:Port 分隔格式");
 
         var client = new GenSocketClient();
-        
-        // 绑定 Push 事件：当收到数据时，推送到 Host (UI 监控)
-        client.DataReceived += (data) => 
+
+        client.DataReceived += (data) =>
         {
-            // 使用约定的 EventType 格式 "DeviceData:{address}"
-            // 这样 Host 端 DataManager 可以通过解析 EventType 知道是哪个设备的数据
             _context?.PushEvent($"{PluginEvents.DeviceData}:{address}", data);
         };
 
         client.Disconnected += () =>
         {
-             _context?.PushEvent(PluginEvents.DeviceDisconnected, System.Text.Encoding.UTF8.GetBytes(address));
-             _context?.Log(LogLevel.Warning, $"[{address}] Disconnected remotely");
+            _context?.PushEvent(PluginEvents.DeviceDisconnected, Encoding.UTF8.GetBytes(address));
+            _context?.Log(LogLevel.Warning, $"[{address}] 远端异常断开连接");
         };
 
         await client.ConnectAsync(host, port, timeoutMs);
-        
+
         _clients[address] = client;
-        _context?.Log(LogLevel.Info, $"[{address}] Connected");
-        _context?.Log(LogLevel.Debug, $"[{address}] CONNECT Flow");
+        _context?.Log(LogLevel.Info, $"[{address}] 连接成功");
+                        _context?.Log(LogLevel.Debug, $"[{address}] 执行连接流程 (线程安全模式)");
         return Array.Empty<byte>();
     }
 
-    private async Task<byte[]> HandleDisconnect(string address)
+    private byte[] HandleDisconnectInternal(string address)
     {
         if (_clients.TryRemove(address, out var client))
         {
             client.Disconnect();
             client.Dispose();
-            _context?.Log(LogLevel.Info, $"[{address}] Disconnected");
+            _context?.Log(LogLevel.Info, $"[{address}] 已断开连接");
         }
         return Array.Empty<byte>();
     }
-
-    private async Task<byte[]> HandleSend(string address, byte[] payload)
-    {
-        var client = GetClientOrThrow(address);
-        await client.SendAsync(payload);
-        _context?.Log(LogLevel.Debug, $"[{address}] Sent: {payload.ToHexStringWithSpaces()}");
-        return Array.Empty<byte>();
-    }
-
-    private Task<byte[]> HandleRead(string address)
-    {
-        var client = GetClientOrThrow(address);
-        var data = client.ReadAll();
-        if (data.Length > 0)
-            _context?.Log(LogLevel.Debug, $"[{address}] Read: {data.ToHexStringWithSpaces()}");
-        return Task.FromResult(data);
-    }
-
-    private async Task<byte[]> HandleWait(string address, int timeoutMs, string? terminator, CancellationToken ct)
-    {
-        var client = GetClientOrThrow(address);
-        return await client.WaitAsync(timeoutMs == 0 ? -1 : timeoutMs, terminator, ct);
-    }
-    
-    // --- Helper Methods ---
 
     private GenSocketClient GetClientOrThrow(string address)
     {
         if (_clients.TryGetValue(address, out var client) && client.IsConnected)
             return client;
-        
+
         throw new SocketPluginException($"设备 [{address}] 未连接，请先执行 Connect 动作");
     }
 

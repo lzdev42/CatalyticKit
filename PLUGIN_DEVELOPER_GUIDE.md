@@ -306,6 +306,15 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 
 > ✅ **Service API 是完全线程安全的。** 你可以从任意线程调用 `Service` 的任何方法或订阅事件，SDK 内部已做防护。即使你在事件回调中调用 `Service.Slot(x).Start()` 也不会死锁。
 
+#### [NEW] 插件实例的线程安全
+> [!IMPORTANT]
+> **核心机制**: Catalytic Host 采用单例模式加载插件。这意味着一个测试项目中，**同一个插件 ID 的实例在内存中只有一份**。
+>
+> 当多个 Slot 并发执行测试流程时，它们会**同时进入**同一个插件实例的 `ExecuteAsync` 或 `IProcessor.ExecuteAsync` 方法。因此，插件开发者**必须**处理好并发竞争问题：
+> 1. **物理资源互斥**: 如串口、网口等独占资源，必须使用 `SemaphoreSlim` 或 `lock` 确保同一时间只有一个 Slot 在操作。推荐使用 `SemaphoreSlim` 因为它支持异步等待 `WaitAsync`。
+> 2. **数据隔离**: 避免使用类级别的全局变量存储特定槽位的状态，除非该变量是用来做跨槽位共享的。
+> 3. **缓冲区清理**: 由于设备响应可能超时，下次通讯前应主动清理物理缓冲区，防止读到上一个 Slot 遗留的残余数据。
+
 > ✅ **事件回调异常保护。** 如果你的事件处理代码抛出异常，SDK 会自动捕获并上报给 Host，不会导致 Host 崩溃。
 
 #### 代码示例：PLC 集成
@@ -734,11 +743,11 @@ namespace Acme.Serial;
 /// </summary>
 public class SerialCommunicator : ICommunicator
 {
+    // 线程安全管理：按物理地址锁定 (建议使用 ConcurrentDictionary)
+    private readonly ConcurrentDictionary<string, SerialPort> _ports = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly object _mainLock = new();
     private IPluginContext? _context;
-    
-    // 管理多个串口连接
-    private readonly Dictionary<string, SerialPort> _ports = new();
-    private readonly object _lock = new();
 
     public string Id => "acme.serial";
     public string Protocol => "serial";
@@ -752,24 +761,19 @@ public class SerialCommunicator : ICommunicator
 
     public Task DeactivateAsync()
     {
-        // 释放所有串口资源
-        lock (_lock)
+        // 释放所有资源
+        lock (_mainLock)
         {
             foreach (var port in _ports.Values)
             {
-                try
-                {
-                    if (port.IsOpen) port.Close();
-                    port.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _context?.Log(LogLevel.Warning, $"关闭串口时出错: {ex.Message}");
-                }
+                try { if (port.IsOpen) port.Close(); port.Dispose(); }
+                catch { /* ignore */ }
             }
             _ports.Clear();
+            
+            foreach (var s in _locks.Values) s.Dispose();
+            _locks.Clear();
         }
-        _context?.Log(LogLevel.Info, "串口插件已停用");
         return Task.CompletedTask;
     }
 
@@ -791,37 +795,47 @@ public class SerialCommunicator : ICommunicator
         ExecuteOptions options,
         CancellationToken ct)
     {
-        // 解析动作类型
         if (!Enum.TryParse<CommAction>(action, ignoreCase: true, out var commAction))
-        {
             throw new ArgumentException($"未知的动作类型: {action}");
-        }
 
-        var port = GetOrCreatePort(address);
-        _context?.Log(LogLevel.Debug, $"[{address}] 执行动作: {commAction}");
+        // 1. 获取该地址对应的锁（通过 ConcurrentDictionary 确保原子性）
+        var semaphore = _locks.GetOrAdd(address, _ => new SemaphoreSlim(1, 1));
 
-        switch (commAction)
+        // 2. 使用异步等待获取权限
+        await semaphore.WaitAsync(ct);
+        try
         {
-            case CommAction.Connect:
-                return await ConnectAsync(port, options.TimeoutMs, ct);
-                
-            case CommAction.Disconnect:
-                return await DisconnectAsync(port);
-                
-            case CommAction.Send:
-                return await SendAsync(port, payload, ct);
-                
-            case CommAction.Read:
-                return await ReadAsync(port, options.TimeoutMs, options.Terminator, ct);
-                
-            case CommAction.Query:
-                return await QueryAsync(port, payload, options.TimeoutMs, options.Terminator, ct);
-                
-            case CommAction.Status:
-                return GetStatus(port);
-                
-            default:
-                throw new NotSupportedException($"不支持的动作: {commAction}");
+            var port = GetOrCreatePort(address);
+            
+            // 3. 执行具体动作
+            switch (commAction)
+            {
+                case CommAction.Connect:
+                    return await ConnectAsync(port, options.TimeoutMs, ct);
+                    
+                case CommAction.Send:
+                    // 关键：发送前清理无效数据，防止读取到上一个 Slot 的残留
+                    if (port.IsOpen) port.DiscardInBuffer();
+                    return await SendAsync(port, payload, ct);
+                    
+                case CommAction.Query:
+                    if (port.IsOpen) port.DiscardInBuffer();
+                    return await QueryAsync(port, payload, options.TimeoutMs, options.Terminator, ct);
+                    
+                case CommAction.Read:
+                    return await ReadAsync(port, options.TimeoutMs, options.Terminator, ct);
+                    
+                case CommAction.Disconnect:
+                    return await DisconnectAsync(port);
+                    
+                default:
+                    return [];
+            }
+        }
+        finally
+        {
+            // 4. 释放锁
+            semaphore.Release();
         }
     }
 
@@ -933,20 +947,12 @@ public class SerialCommunicator : ICommunicator
 
     private SerialPort GetOrCreatePort(string portName)
     {
-        lock (_lock)
+        lock (_mainLock)
         {
             if (_ports.TryGetValue(portName, out var port))
-            {
                 return port;
-            }
 
-            var newPort = new SerialPort(portName)
-            {
-                BaudRate = 9600,
-                DataBits = 8,
-                Parity = Parity.None,
-                StopBits = StopBits.One
-            };
+            var newPort = new SerialPort(portName) { BaudRate = 9600 };
             _ports[portName] = newPort;
             return newPort;
         }
