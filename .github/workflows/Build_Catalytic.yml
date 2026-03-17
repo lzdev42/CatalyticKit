@@ -295,7 +295,7 @@ jobs:
           files: release-artifacts/**/*
           draft: ${{ steps.release_type.outputs.draft }}
           prerelease: false
-        body: |
+          body: |
           ## 下载说明
 
           ### Catalytic 主程序
