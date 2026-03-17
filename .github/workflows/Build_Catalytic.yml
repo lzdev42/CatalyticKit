@@ -288,14 +288,9 @@ jobs:
         with:
           path: release-artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          files: release-artifacts/**/*
-          draft: ${{ steps.release_type.outputs.draft }}
-          prerelease: false
-          body: |
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md << 'EOF'
           ## 下载说明
 
           ### Catalytic 主程序
@@ -331,6 +326,17 @@ jobs:
           | `CatalyticSerialPort` | 串口通信插件 |
           | `CsvReporter` | CSV 数据导出插件 |
           | `SocketClient` | Socket 客户端插件 |
+          EOF
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: release-artifacts/**/*
+          draft: ${{ steps.release_type.outputs.draft }}
+          prerelease: false
+        body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
