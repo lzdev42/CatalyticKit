@@ -8,7 +8,7 @@ on:
         description: 'Version to build (e.g., v1.0.0 or v1.0.0-dev.1)'
         required: true
         type: string
-  
+
   # 被 Catalytic 仓库触发
   repository_dispatch:
     types: [catalytic-release]
@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CATALYTIC_PAT }}
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          
+
           # 检查 tag 是否存在
           if gh api repos/lzdev42/catalytic/git/ref/tags/$VERSION --silent 2>/dev/null; then
             echo "Tag $VERSION exists, will checkout tag"
@@ -41,7 +41,7 @@ jobs:
             echo "Tag $VERSION does not exist, will checkout main branch"
             echo "ref=main" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
   build:
@@ -58,7 +58,7 @@ jobs:
             platform: macos
             arch: Intel
             rust-target: x86_64-apple-darwin
-          
+
           # Linux
           - os: ubuntu-24.04
             platform: linux
@@ -68,7 +68,7 @@ jobs:
             platform: linux
             arch: arm64
             rust-target: aarch64-unknown-linux-gnu
-          
+
           # Windows
           - os: windows-latest
             platform: windows
@@ -116,18 +116,16 @@ jobs:
           # 可以在这里注入版本号到构建脚本，如果需要的话
         shell: bash
 
-      # ============================================================
+      # ===
       # Environment Setup
-      # ============================================================
+      # ===
       - name: Setup Java 25
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'jetbrains'
           cache: 'gradle'
-          # token: ${{ secrets.GITHUB_TOKEN }}
-          env:
-          GITHUB_TOKEN: ${{ secrets.GH_DOTCOM_TOKEN }} 
+          token: ${{ secrets.GH_DOTCOM_TOKEN }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
@@ -157,9 +155,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libfuse2 wget
 
-      # ============================================================
+      # ===
       # Build
-      # ============================================================
+      # ===
       - name: Grant execute permission
         if: runner.os != 'Windows'
         run: chmod +x ./build_release.sh
@@ -189,12 +187,12 @@ jobs:
             -CompressionLevel Optimal `
             -Force
 
-      # ============================================================
+      # ===
       # Upload Artifacts
-      # ============================================================
+      # ===
       - name: Upload Build Artifact (macOS/Linux)
         if: matrix.platform != 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -204,15 +202,15 @@ jobs:
 
       - name: Upload Build Artifact (Windows)
         if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalytic-${{ steps.vars.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*.zip
           retention-days: 14
 
-  # ============================================================
+  # ===
   # 🔥 只有正式版（不含 dev）才发布 Release
-  # ============================================================
+  # ===
   release:
     name: Create Release
     runs-on: ubuntu-latest
@@ -221,8 +219,8 @@ jobs:
       always() &&
       needs.build.result == 'success' &&
       (
-        (github.event_name == 'workflow_dispatch' && !contains(needs.check-tag.outputs.version, 'dev')) ||
-        (github.event_name == 'repository_dispatch' && !contains(github.event.client_payload.tag, 'dev'))
+        (github.event_name == 'workflow_dispatch' && !contains(needs.check-tag.outputs.version, 'dev'))
+        || (github.event_name == 'repository_dispatch' && !contains(github.event.client_payload.tag, 'dev'))
       )
     steps:
       - name: Set version
@@ -236,10 +234,10 @@ jobs:
         shell: bash
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-artifacts
-      
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
