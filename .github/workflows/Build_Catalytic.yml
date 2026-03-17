@@ -295,7 +295,7 @@ jobs:
           files: release-artifacts/**/*
           draft: ${{ steps.release_type.outputs.draft }}
           prerelease: false
-                body_path: .github/RELEASE_NOTES.md
+          body_path: .github/RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
