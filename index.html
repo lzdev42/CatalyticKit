@@ -153,8 +153,8 @@
                             配置即流程
                         </h1>
                         <p className="max-w-md mx-auto text-gray-400 text-xl font-normal leading-relaxed mb-12">
-                            将工程经验沉淀为可复用的平台资产，<br />
-                            而不是散落在每个项目的代码里。
+                            将工程经验沉淀为平台资产<br />
+                            而非散落在各项目的碎片化代码中
                         </p>
                         <div className="flex items-center justify-center gap-6 text-blue-500 text-lg font-medium">
                             <button onClick={() => onNavigate('arch')} className="hover:underline flex items-center gap-1 group">
@@ -174,12 +174,12 @@
                             <ShieldCheck size={32} className="text-gray-300" />
                         </div>
                         <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-6">
-                            不变的，由引擎承载
+                            标准操作，引擎代劳
                         </h2>
                         <p className="max-w-2xl mx-auto text-gray-400 text-xl leading-relaxed">
-                            连接设备、发送指令、取回数据、判定结果。<br />
-                            无论项目如何变化，这些事情永远跑不掉。<br />
-                            Catalytic 把它们做成平台，一次搭建，持续复用。
+                            连接设备、指令交互、数据取回、结果判定<br />
+                            无论项目如何更迭，这些底层逻辑始终如一<br />
+                            Catalytic 把它们做成平台，一次搭建，持续复用
                         </p>
                     </div>
                 </section>
@@ -190,12 +190,12 @@
                         <div className="bg-[#111] rounded-[40px] p-12 md:p-20 text-center overflow-hidden relative group border border-white/5">
                             <div className="relative z-10">
                                 <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-8">
-                                    变化的，交给插件扩展
+                                    非标逻辑，插件定义
                                 </h2>
                                 <p className="max-w-2xl mx-auto text-gray-400 text-lg leading-relaxed mb-12">
-                                    新仪器、新协议、MES 对接——<br />
-                                    开发一个插件即可，无需改动主体软件。<br />
-                                    核心不动，扩展无限。
+                                    新仪器、新协议、MES 对接<br />
+                                    开发一个插件即可，无需改动主体软件<br />
+                                    核心不动，扩展无限
                                 </p>
                                 <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-gray-300">
                                     <Plus size={14} /> <span>契约固定，实现自由</span>
@@ -210,7 +210,7 @@
                 <section className="py-32 px-6">
                     <div className="max-w-4xl mx-auto text-center">
                         <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-12">
-                            一次配置，到处运行
+                            全端适配，跨机迁移
                         </h2>
                         <div className="flex justify-center gap-16 md:gap-32 items-center mb-12 text-gray-500">
                             <div className="flex flex-col items-center gap-4 group cursor-default hover:text-white transition-colors duration-500">
@@ -227,9 +227,9 @@
                             </div>
                         </div>
                         <p className="max-w-2xl mx-auto text-gray-400 text-lg leading-relaxed">
-                            基于 Kotlin Compose Multiplatform。<br />
-                            macOS / Windows / Linux 全平台支持。<br />
-                            配置文件导出为 JSON，跨机台一键迁移。
+                            基于 Kotlin Compose Multiplatform<br />
+                            macOS / Windows / Linux 全平台支持<br />
+                            配置文件导出为 JSON，跨机台一键迁移
                         </p>
                     </div>
                 </section>
@@ -258,8 +258,8 @@
                         设计逻辑
                     </h1>
                     <p className="text-xl text-gray-400 leading-relaxed mb-20 max-w-2xl">
-                        测试的本质是不变的，变化的只是参数。<br />
-                        Catalytic 把不变的部分沉淀为引擎，把变化的部分推到配置层。
+                        自动化的本质是流程，变量在于参数<br />
+                        Catalytic 把不变的部分沉淀为引擎，把变化的部分推到配置层
                     </p>
 
                     {/* 架构对比 */}
@@ -271,9 +271,9 @@
                                 </div>
                                 <h3 className="text-2xl font-semibold mb-4">引擎层</h3>
                                 <p className="text-gray-400 leading-relaxed text-sm">
-                                    连接设备、执行流程、解析数据、判定结果、处理异常——这些事情每个项目都要做，由平台统一承载，开发者不需要重复实现。
+                                    连接设备、执行流程、解析数据、判定结果、处理异常——这些事情每个项目都要做，由平台统一承载，开发者不需要重复实现
                                     <br /><br />
-                                    各 Slot 持有独立的状态机与变量池，多工位并行运行，互不干扰。
+                                    原生支持多工位并行，逻辑独立调度
                                 </p>
                             </div>
                             <div className="mt-8 pt-8 border-t border-white/5 text-xs font-mono text-gray-600">
@@ -289,9 +289,9 @@
                                 </div>
                                 <h3 className="text-2xl font-semibold mb-4">配置层</h3>
                                 <p className="text-gray-600 leading-relaxed text-sm">
-                                    仪器型号、指令内容、判定阈值、流程顺序——这些差异全部推到配置层，通过图形化界面定义，无需编写代码。
+                                    仪器型号、指令内容、判定阈值、流程顺序——这些差异全部推到配置层，通过图形化界面定义，无需编写代码
                                     <br /><br />
-                                    换项目只需改配置，不需要动一行主体代码。配置导出为 JSON 文件，跨机台一键迁移。
+                                    换项目只需改配置，不需要动一行主体代码。配置导出为 JSON 文件，跨机台一键迁移
                                 </p>
                             </div>
                             <div className="mt-8 pt-8 border-t border-black/10 text-xs font-mono text-gray-500">
@@ -304,7 +304,7 @@
                     <div className="mb-32">
                         <h3 className="text-2xl font-semibold mb-8 text-center">插件契约</h3>
                         <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-8 font-mono text-sm overflow-x-auto shadow-2xl">
-                            <div className="text-gray-500 mb-4">// 框架约束通讯契约，插件内部实现自由</div>
+                            <div className="text-gray-500 mb-4">// 框架定义通讯契约，插件负责具体实现</div>
                             <div>
                                 <span className="text-purple-400">public interface </span>
                                 <span className="text-yellow-400">ICommunicator</span>
