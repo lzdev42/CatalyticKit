@@ -304,7 +304,8 @@ jobs:
           files: release-artifacts/**/*
           draft: ${{ steps.release_type.outputs.draft }}
           prerelease: false
-          body_path: repo/.github/RELEASE_NOTES.md  # ✅ 路径同步更新
+          body_path: repo/.github/RELEASE_NOTES.md
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
