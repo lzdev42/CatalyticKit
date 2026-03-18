@@ -284,15 +284,18 @@ jobs:
           fi
         shell: bash
 
+      # ✅ 先 checkout 到独立子目录，不影响后续下载的产物
+      - name: Checkout for Release Notes
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: repo
+
+      # ✅ checkout 完再下载，不会被 git clean 删除
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: release-artifacts
-      - name: Checkout CatalyticKit for Release Notes
-        uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -301,10 +304,9 @@ jobs:
           files: release-artifacts/**/*
           draft: ${{ steps.release_type.outputs.draft }}
           prerelease: false
-          body_path: .github/RELEASE_NOTES.md
+          body_path: repo/.github/RELEASE_NOTES.md   # ✅ 路径同步更新
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
       - name: Clear previous release notes
         env:
