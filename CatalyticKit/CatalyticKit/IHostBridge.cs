@@ -44,6 +44,11 @@ public interface IHostBridge
     void SlotSetSN(int slotIndex, string sn);
 
     /// <summary>
+    /// 获取指定 Slot 的产品 SN
+    /// </summary>
+    string? SlotGetSN(int slotIndex);
+
+    /// <summary>
     /// 设置指定 Slot 的流程变量
     /// </summary>
     void SlotSetVariable(int slotIndex, string name, string jsonValue);
@@ -90,6 +95,11 @@ public interface IHostBridge
     /// <param name="passed">步骤是否判定为通过</param>
     /// <param name="failReason">失败的具体原因，可通过时传 null</param>
     void ReportStepResult(int slotIndex, bool passed, string? failReason);
+    
+    /// <summary>
+    /// 登记当前 Slot 正在运行的 Host 类型任务 (用于生命周期关联和取消)
+    /// </summary>
+    void RegisterRunningHostTask(int slotIndex, ulong taskId);
 
     // --- 事件订阅 ---
 
