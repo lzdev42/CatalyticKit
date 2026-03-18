@@ -111,7 +111,8 @@ jobs:
           java-version: '25'
           distribution: 'jetbrains'
           cache: 'gradle'
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
@@ -287,6 +288,11 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: release-artifacts
+        - name: Checkout CatalyticKit for Release Notes
+          uses: actions/checkout@v6
+          with:
+            token: ${{ secrets.GITHUB_TOKEN }}
+
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
