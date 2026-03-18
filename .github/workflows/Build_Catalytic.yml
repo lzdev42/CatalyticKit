@@ -111,8 +111,8 @@ jobs:
           java-version: '25'
           distribution: 'jetbrains'
           cache: 'gradle'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
