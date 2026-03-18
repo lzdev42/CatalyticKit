@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.4.1 | Updated: 2026-03-11
+> SDK Version: 0.5.0 | Updated: 2026-03-18
 
 ## Overview
 
@@ -117,6 +117,21 @@ public interface IProcessor : IPlugin
     Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
 ```
+
+### IInterceptor [NEW v0.5.0]
+
+```csharp
+public interface IInterceptor : IPlugin
+{
+    // Return true to allow, false to skip/fail
+    Task<bool> BeforeStepAsync(int slotIndex, int stepId, string stepName, CancellationToken ct);
+    
+    // Notification after step completes
+    Task AfterStepAsync(int slotIndex, int stepId, string stepName, bool passed);
+}
+```
+
+> **Restriction**: Only ONE `IInterceptor` is allowed globally.
 
 ---
 

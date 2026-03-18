@@ -1,6 +1,6 @@
 # Catalytic 插件开发指南 (v0.4.1)
 
-*(更新日期: 2026-03-11 | SDK 版本: 0.4.1)*
+*(更新日期: 2026-03-18 | SDK 版本: 0.5.0)*
 
 ---
 
@@ -26,12 +26,11 @@
 
 Catalytic 采用模块化插件架构。**所有与硬件交互或自定义业务逻辑的功能都通过插件实现。** 无论是基础的通讯协议支持，还是特定产品的测试流程扩展，其核心都是插件。
 
-### 插件的两种类型
-
 | 类型 | 接口 | 用途 | 典型场景 |
 |------|------|------|----------|
 | **通讯器** | `ICommunicator` | 底层设备通讯 | 串口、TCP、VISA、Modbus |
-| **处理器** | `IProcessor` | 扩展自定义逻辑 | 由开发者定义的任何功能扩展 |
+| **处理器** | `IProcessor` | 扩展自定义业务逻辑 | 扫码、数据转换、数据库操作 |
+| **拦截器** | `IInterceptor` | 全局步骤执行控制 | 安全门确认、外部条件触发、步骤过滤 |
 
 ### 为什么使用插件？
 
@@ -483,7 +482,33 @@ public interface IProcessor : IPlugin
 }
 ```
 
-### 5.5 IPluginContext（上下文）
+### 5.5 IInterceptor (拦截器) [NEW v0.5.0]
+
+拦截器主要用于在每个步骤执行前进行“准入检查”，或在步骤执行后进行统一处理。
+
+> [!WARNING]
+> **全局唯一性**：整个系统中只允许加载一个拦截器插件。如果加载了多个，系统会以先发现的为准，并在日志中发出警告。
+
+```csharp
+public interface IInterceptor : IPlugin
+{
+    /// <summary>
+    /// 步骤执行前的拦截逻辑
+    /// </summary>
+    /// <returns>返回 true 允许执行，返回 false 则跳过该步并将结果标记为 Failed</returns>
+    Task<bool> BeforeStepAsync(int slotIndex, int stepId, string stepName, CancellationToken ct);
+
+    /// <summary>
+    /// 步骤执行后的通知（纯通知，不影响结果）
+    /// </summary>
+    Task AfterStepAsync(int slotIndex, int stepId, string stepName, bool passed);
+}
+```
+
+#### 关键特性：
+1. **同步阻塞**：`BeforeStepAsync` 会阻塞 Engine 的执行，直到收到插件的决定。
+2. **超时机制**：Host 为拦截器提供了 5s 的默认超时保护。如果插件在该时间内未返回，系统将自动视为 `false` (拒绝)。
+3. **无缝执行**：如果没有加载拦截器，Engine 会以零延迟直接执行步骤，不会产生性能损耗。
 
 在 `ActivateAsync` 中传入，保存它以便后续使用。
 
