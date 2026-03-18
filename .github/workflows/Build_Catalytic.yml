@@ -288,10 +288,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: release-artifacts
-        - name: Checkout CatalyticKit for Release Notes
-          uses: actions/checkout@v6
-          with:
-            token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout CatalyticKit for Release Notes
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
       - name: Create Release
