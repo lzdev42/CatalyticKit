@@ -234,14 +234,37 @@ public interface IPluginContext
 
 ---
 
-## Service API (Plugin → Host Control)
+## Parameter Transmission Design (v0.5.0)
+
+For `HostControlled` tasks (Extended mode), the system provides a **"Raw Conduit"** for custom parameters.
+
+### User Interface Layer (Kotlin)
+1. User enters a string in the "Parameters" text box.
+2. The UI layer encodes this string using **Base64**.
+3. It is stored in the flow script as a plain JSON string (avoiding escaping issues with special characters in nested JSON).
+
+### Host Layer (C#)
+1. When the Engine status reports a step index, the Host looks up the corresponding `StepDefinition`.
+2. The `Params` field is **decoded from Base64** back into its original UTF-8 string.
+3. This "Original String" is stored in the `StepContext` for that slot.
+
+### Plugin Layer (C#)
+1. The plugin calls `Service.Slot(x).GetCurrentStep().Params`.
+2. It receives the **identical string** as entered in the UI, regardless of line breaks, quotes, or JSON-like syntax.
+3. The plugin developer is responsible for interpreting the content (e.g., using `JsonConvert.DeserializeObject` if the expected format is JSON).
+
+> [!TIP]
+> This design ensures that the system is entirely agnostic to the parameter format. The parameter box acts as a binary-safe buffer between the user and the plugin.
+
+---
+
+## Service API
 
 Plugins can actively control the test flow via the static `Service` class:
 
 ```csharp
 // Global commands
 Service.StartAll();              // Start all slots
-Service.StopAll();               // Stop all slots
 
 // Per-slot commands
 Service.Slot(0).Start();         // Start slot 0

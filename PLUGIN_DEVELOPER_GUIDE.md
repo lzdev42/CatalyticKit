@@ -482,6 +482,36 @@ public interface IProcessor : IPlugin
 }
 ```
 
+#### 获取运行参数 [NEW v0.5.0]
+
+在“扩展模式”下，插件通常需要读取在 UI 界面配置的参数（如：数据库连接串、扫描枪指令、CSV 路径等）。
+
+Catalytic 采用 **“拉取 (Pull)”** 模式提供参数。插件在 `ExecuteAsync` 中通过 `Service` 接口获取当前步骤的上下文：
+
+```csharp
+public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
+{
+    // 1. 获取当前 Slot 的步骤上下文
+    var step = Service.Slot(slotIndex).GetCurrentStep();
+    
+    // 2. 读取配置的参数字符串
+    string? rawParams = step?.Params; 
+    
+    if (string.IsNullOrEmpty(rawParams)) {
+        // 处理参数缺失的情况
+        return;
+    }
+
+    // 3. 根据你的逻辑解析参数 (JSON, CSV 或普通文本)
+    // 示例：如果填的是 JSON
+    // var config = JsonConvert.DeserializeObject<MyConfig>(rawParams);
+}
+```
+
+> [!TIP]
+> **原汁原味传输**：系统底层使用 Base64 对参数进行了封装，确保无论你在 UI 填入什么特殊字符（换行、引号、逗号），插件拿到的 `Params` 字符串都与 UI 输入的完全一致，不发生转义或截断。
+
+
 ### 5.5 IInterceptor (拦截器) [NEW v0.5.0]
 
 拦截器主要用于在每个步骤执行前进行“准入检查”，或在步骤执行后进行统一处理。

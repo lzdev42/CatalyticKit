@@ -48,6 +48,13 @@ public record StepDefinition
     /// 为 null 表示该步骤未配置检查规则。
     /// </summary>
     public CheckRuleDefinition? CheckRule { get; init; }
+    
+    /// <summary>
+    /// 步骤配置的参数字符串（仅扩展模式有值）。
+    /// 内容由 UI 配置决定，可能是普通字符串、CSV、JSON 等，插件自行解析。
+    /// 标准模式（EngineControlled）此字段为 null。
+    /// </summary>
+    public string? Params { get; init; }
 }
 
 /// <summary>

@@ -234,6 +234,14 @@ jobs:
           cd "$OUTPUT"
           zip -r "${{ github.workspace }}/SocketClient-${{ steps.vars.outputs.version }}.zip" .
 
+      - name: Build & Package Interceptor
+        run: |
+          dotnet build Interceptor/Interceptor/Interceptor.csproj -c Release
+          OUTPUT=Interceptor/Interceptor/bin/Release/net10.0
+          find "$OUTPUT" -name "*.pdb" -o -name "*.xml" -o -name "*.deps.json" -o -name "*.runtimeconfig.json" -o -name "*.runtimeconfig.dev.json" | xargs rm -f
+          cd "$OUTPUT"
+          zip -r "${{ github.workspace }}/Interceptor-${{ steps.vars.outputs.version }}.zip" .
+
       - name: Upload Plugin Artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -242,6 +250,7 @@ jobs:
             ${{ github.workspace }}/CatalyticSerialPort-${{ steps.vars.outputs.version }}.zip
             ${{ github.workspace }}/CsvReporter-${{ steps.vars.outputs.version }}.zip
             ${{ github.workspace }}/SocketClient-${{ steps.vars.outputs.version }}.zip
+            ${{ github.workspace }}/Interceptor-${{ steps.vars.outputs.version }}.zip
           retention-days: 14
 
   release:
