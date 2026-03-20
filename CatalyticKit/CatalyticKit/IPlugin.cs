@@ -15,9 +15,10 @@ public interface IPluginContext
     /// <summary>
     /// 通过 Catalytic 的日志系统输出日志
     /// </summary>
+    /// <param name="slotIndex">触发此日志的槽位索引，-1 表示全局日志</param>
     /// <param name="level">日志级别</param>
     /// <param name="message">日志内容</param>
-    void Log(LogLevel level, string message);
+    void Log(int slotIndex, LogLevel level, string message);
 
     /// <summary>
     /// 获取指定协议或 ID 的通讯器
@@ -31,9 +32,11 @@ public interface IPluginContext
     /// 推送事件到 Catalytic
     /// 用于设备主动推送数据（如 CAN 帧监控、设备报警）
     /// </summary>
+    /// <param name="slotIndex">关联的槽位索引</param>
+    /// <param name="address">关联的设备地址</param>
     /// <param name="eventType">事件类型</param>
     /// <param name="data">事件数据</param>
-    void PushEvent(string eventType, byte[] data);
+    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
 
     /// <summary>
     /// 获取设备缓冲的数据 (用于 Polling 模式)
@@ -84,6 +87,7 @@ public interface ICommunicator : IPlugin
     /// <summary>
     /// 执行通讯动作
     /// </summary>
+    /// <param name="slotIndex">槽位索引</param>
     /// <param name="address">设备地址，如 "COM3" 或 "192.168.1.100:5025"</param>
     /// <param name="action">操作类型: "send"、"query"、"wait"</param>
     /// <param name="payload">命令数据</param>
@@ -91,6 +95,7 @@ public interface ICommunicator : IPlugin
     /// <param name="ct">取消令牌</param>
     /// <returns>设备响应数据</returns>
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address, 
         string action, 
         byte[] payload, 
@@ -100,6 +105,7 @@ public interface ICommunicator : IPlugin
     /// <summary>
     /// 执行通讯动作（带高级选项）
     /// </summary>
+    /// <param name="slotIndex">槽位索引</param>
     /// <param name="address">设备地址</param>
     /// <param name="action">操作类型</param>
     /// <param name="payload">命令数据</param>
@@ -107,6 +113,7 @@ public interface ICommunicator : IPlugin
     /// <param name="ct">取消令牌</param>
     /// <returns>设备响应数据</returns>
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,

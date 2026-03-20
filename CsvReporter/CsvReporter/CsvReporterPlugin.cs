@@ -26,7 +26,7 @@ public class CsvReporterPlugin : IProcessor
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "[CsvReporter] 插件已激活。");
+        _context.Log(-1, LogLevel.Info, "[CsvReporter] 插件已激活。");
 
         _outputDir = Service.ReportFolder();
         Directory.CreateDirectory(_outputDir);
@@ -37,13 +37,13 @@ public class CsvReporterPlugin : IProcessor
             _testItems = flow?.Steps.Where(s => s.IsTestItem).ToList();
 
             if (_testItems is { Count: > 0 })
-                _context.Log(LogLevel.Info, $"[CsvReporter] 已加载流程定义，共 {_testItems.Count} 个测试项。");
+                _context.Log(-1, LogLevel.Info, $"[CsvReporter] 已加载流程定义，共 {_testItems.Count} 个测试项。");
             else
-                _context.Log(LogLevel.Warning, "[CsvReporter] 流程定义为空，CSV 表头将在执行时动态生成。");
+                _context.Log(-1, LogLevel.Warning, "[CsvReporter] 流程定义为空，CSV 表头将在执行时动态生成。");
         }
         catch (ServiceNotInitializedException)
         {
-            _context.Log(LogLevel.Warning, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取。");
+            _context.Log(-1, LogLevel.Warning, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取。");
         }
 
         return Task.CompletedTask;
@@ -51,7 +51,7 @@ public class CsvReporterPlugin : IProcessor
 
     public Task DeactivateAsync()
     {
-        _context?.Log(LogLevel.Info, "[CsvReporter] 插件已停用。");
+        _context?.Log(-1, LogLevel.Info, "[CsvReporter] 插件已停用。");
         return Task.CompletedTask;
     }
 
@@ -62,7 +62,7 @@ public class CsvReporterPlugin : IProcessor
     public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
     {
         var slot = Service.Slot(slotIndex);
-        _context?.Log(LogLevel.Info, $"[CsvReporter] 开始为 Slot {slotIndex} 生成横向 CSV 报告...");
+        _context?.Log(slotIndex, LogLevel.Info, $"[CsvReporter] 开始为 Slot {slotIndex} 生成横向 CSV 报告...");
 
         try
         {
@@ -77,7 +77,7 @@ public class CsvReporterPlugin : IProcessor
             var history = slot.GetTestHistory();
             if (history == null)
             {
-                _context?.Log(LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} 无测试历史，跳过写入。");
+                _context?.Log(slotIndex, LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} 无测试历史，跳过写入。");
                 slot.ReportPass(); 
                 return;
             }
@@ -90,17 +90,17 @@ public class CsvReporterPlugin : IProcessor
             // 执行带锁的追加写入
             await AppendToCsvAsync(csvPath, history, ct);
 
-            _context?.Log(LogLevel.Info, $"[CsvReporter] 数据已追加至宽表 CSV: {csvPath}");
+            _context?.Log(slotIndex, LogLevel.Info, $"[CsvReporter] 数据已追加至宽表 CSV: {csvPath}");
             slot.ReportPass();
         }
         catch (OperationCanceledException)
         {
-            _context?.Log(LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} CSV 写入被取消。");
+            _context?.Log(slotIndex, LogLevel.Warning, $"[CsvReporter] Slot {slotIndex} CSV 写入被取消。");
             throw; 
         }
         catch (Exception ex)
         {
-            _context?.Log(LogLevel.Error, $"[CsvReporter] Slot {slotIndex} CSV 写入失败: {ex.Message}");
+            _context?.Log(slotIndex, LogLevel.Error, $"[CsvReporter] Slot {slotIndex} CSV 写入失败: {ex.Message}");
             slot.ReportFail($"CSV 写入异常: {ex.Message}");
         }
     }

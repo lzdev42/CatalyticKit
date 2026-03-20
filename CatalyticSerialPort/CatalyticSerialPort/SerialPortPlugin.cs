@@ -81,7 +81,7 @@ public class SerialPortPlugin : ICommunicator
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "串口通讯插件 (线程安全版) 已激活");
+        _context.Log(-1, LogLevel.Info, "串口通讯插件 (线程安全版) 已激活");
         return Task.CompletedTask;
     }
 
@@ -101,24 +101,26 @@ public class SerialPortPlugin : ICommunicator
         }
         _portLocks.Clear();
 
-        _context?.Log(LogLevel.Info, "串口通讯插件已停用");
+        _context?.Log(-1, LogLevel.Info, "串口通讯插件已停用");
         return Task.CompletedTask;
     }
 
     public Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
         int timeoutMs,
         CancellationToken ct)
     {
-        return ExecuteAsync(address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
+        return ExecuteAsync(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
     }
 
     /// <summary>
     /// 执行通讯动作 (全量原子化受锁保护)
     /// </summary>
     public async Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
@@ -143,36 +145,36 @@ public class SerialPortPlugin : ICommunicator
                 switch (commAction)
                 {
                     case CommAction.Connect:
-                        return await HandleConnectInternal(portName, baudRate, options.Terminator);
+                        return await HandleConnectInternal(slotIndex, portName, baudRate, options.Terminator);
 
                     case CommAction.Disconnect:
-                        return HandleDisconnectInternal(portName);
+                        return HandleDisconnectInternal(slotIndex, portName);
 
                     case CommAction.Send:
-                        var sendPort = GetWrapperOrThrow(portName).Port;
+                        var sendPort = GetWrapperOrThrow(slotIndex, portName).Port;
                         sendPort.DiscardInBuffer(); // 补丁：发送前清理残留脏数据
                         sendPort.Write(payload, 0, payload.Length);
-                        _context?.Log(LogLevel.Debug, $"[{portName}] 已发送 {payload.Length} 字节");
+                        _context?.Log(slotIndex, LogLevel.Debug, $"[{portName}] 已发送 {payload.Length} 字节");
                         return Array.Empty<byte>();
 
                     case CommAction.Read:
-                        var readPort = GetWrapperOrThrow(portName).Port;
+                        var readPort = GetWrapperOrThrow(slotIndex, portName).Port;
                         var data = readPort.ReadExisting();
                         if (!string.IsNullOrEmpty(data))
-                            _context?.Log(LogLevel.Debug, $"[{portName}] 已读取 {data.Length} 字符");
+                            _context?.Log(slotIndex, LogLevel.Debug, $"[{portName}] 已读取 {data.Length} 字符");
                         return Encoding.UTF8.GetBytes(data);
 
                     case CommAction.Query:
-                        var queryPort = GetWrapperOrThrow(portName).Port;
+                        var queryPort = GetWrapperOrThrow(slotIndex, portName).Port;
                         queryPort.DiscardInBuffer(); // 补丁：Query 前物理清空串口缓冲区
                         queryPort.Write(payload, 0, payload.Length);
-                        _context?.Log(LogLevel.Debug, $"[{portName}] 已发送 (Query) {payload.Length} 字节");
+                        _context?.Log(slotIndex, LogLevel.Debug, $"[{portName}] 已发送 (Query) {payload.Length} 字节");
 
                         // 等待指定的超时时间并读取
                         await Task.Delay(options.TimeoutMs > 0 ? options.TimeoutMs : 100, ct);
                         var queryData = queryPort.ReadExisting();
                         if (!string.IsNullOrEmpty(queryData))
-                            _context?.Log(LogLevel.Debug, $"[{portName}] 已接收 (Query) {queryData.Length} 字符");
+                            _context?.Log(slotIndex, LogLevel.Debug, $"[{portName}] 已接收 (Query) {queryData.Length} 字符");
                         return Encoding.UTF8.GetBytes(queryData);
 
                     case CommAction.Status:
@@ -189,7 +191,7 @@ public class SerialPortPlugin : ICommunicator
         }
         catch (Exception ex)
         {
-            _context?.Log(LogLevel.Error, $"[{Id}] 在地址 {address} 执行动作 '{action}' 失败: {ex.Message}");
+            _context?.Log(slotIndex, LogLevel.Error, $"[{Id}] 在地址 {address} 执行动作 '{action}' 失败: {ex.Message}");
             throw new SerialPluginException($"串口操作失败: {ex.Message}", ex);
         }
         finally
@@ -200,11 +202,11 @@ public class SerialPortPlugin : ICommunicator
 
     // --- 内部处理方法 ---
 
-    private Task<byte[]> HandleConnectInternal(string portName, int baudRate, string? terminator)
+    private Task<byte[]> HandleConnectInternal(int slotIndex, string portName, int baudRate, string? terminator)
     {
         if (_ports.TryGetValue(portName, out var existing) && existing.Port.IsOpen)
         {
-            _context?.Log(LogLevel.Info, $"[{portName}] 设备已处于连接状态");
+            _context?.Log(slotIndex, LogLevel.Info, $"[{portName}] 设备已处于连接状态");
             return Task.FromResult(Array.Empty<byte>());
         }
 
@@ -239,7 +241,7 @@ public class SerialPortPlugin : ICommunicator
                             {
                                 var line = sp.ReadLine();
                                 var data = Encoding.UTF8.GetBytes(line);
-                                _context?.PushEvent($"{PluginEvents.DeviceData}:{portName}", data);
+                                _context?.PushEvent(slotIndex, portName, $"{PluginEvents.DeviceData}:{portName}", data);
                             }
                             catch (TimeoutException) { break; }
                             catch (InvalidOperationException) { break; }
@@ -252,7 +254,7 @@ public class SerialPortPlugin : ICommunicator
 
             port.Open();
             _ports[portName] = wrapper;
-            _context?.Log(LogLevel.Info, $"[{portName}] 已连接，波特率 {baudRate} (线程安全模式)");
+            _context?.Log(slotIndex, LogLevel.Info, $"[{portName}] 已连接，波特率 {baudRate} (线程安全模式)");
             return Task.FromResult(Array.Empty<byte>());
         }
         catch (UnauthorizedAccessException)
@@ -265,24 +267,24 @@ public class SerialPortPlugin : ICommunicator
         }
     }
 
-    private byte[] HandleDisconnectInternal(string portName)
+    private byte[] HandleDisconnectInternal(int slotIndex, string portName)
     {
         if (_ports.TryRemove(portName, out var wrapper))
         {
             try
             {
                 wrapper.Dispose();
-                _context?.Log(LogLevel.Info, $"[{portName}] 已断开连接");
+                _context?.Log(slotIndex, LogLevel.Info, $"[{portName}] 已断开连接");
             }
             catch (Exception ex)
             {
-                _context?.Log(LogLevel.Warning, $"[{portName}] 断开连接时发生错误: {ex.Message}");
+                _context?.Log(slotIndex, LogLevel.Warning, $"[{portName}] 断开连接时发生错误: {ex.Message}");
             }
         }
         return Array.Empty<byte>();
     }
 
-    private PortWrapper GetWrapperOrThrow(string portName)
+    private PortWrapper GetWrapperOrThrow(int slotIndex, string portName)
     {
         if (_ports.TryGetValue(portName, out var wrapper) && wrapper.Port.IsOpen)
             return wrapper;

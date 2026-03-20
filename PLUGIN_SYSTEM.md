@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.5.0 | Updated: 2026-03-18
+> SDK Version: 0.5.2 | Updated: 2026-03-21
 
 ## Overview
 
@@ -85,6 +85,7 @@ public interface ICommunicator : IPlugin
     
     // Basic execution
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address, 
         string action, 
         byte[] payload, 
@@ -93,6 +94,7 @@ public interface ICommunicator : IPlugin
     
     // Advanced execution with options
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
@@ -118,7 +120,7 @@ public interface IProcessor : IPlugin
 }
 ```
 
-### IInterceptor [NEW v0.5.0]
+### IInterceptor [NEW v0.5.2]
 
 ```csharp
 public interface IInterceptor : IPlugin
@@ -219,13 +221,16 @@ public interface IPluginContext
     string PluginDirectory { get; }
     
     /// Log a message (forwarded to Host's logging system)
-    void Log(LogLevel level, string message);
+    /// @param slotIndex Slot index, -1 for global logs
+    void Log(int slotIndex, LogLevel level, string message);
     
     /// Get another protocol driver (for inter-plugin communication)
     ICommunicator? GetCommunicator(string protocolOrId);
     
     /// Push event to Host (e.g. device disconnect, async data)
-    void PushEvent(string eventType, byte[] data);
+    /// @param slotIndex Associated slot index
+    /// @param address Associated device address
+    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
     
     /// Get buffered device data (for polling mode)
     byte[] GetDeviceData(string deviceId);
@@ -234,7 +239,7 @@ public interface IPluginContext
 
 ---
 
-## Parameter Transmission Design (v0.5.0)
+## Parameter Transmission Design (v0.5.2)
 
 For `HostControlled` tasks (Extended mode), the system provides a **"Raw Conduit"** for custom parameters.
 

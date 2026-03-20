@@ -22,7 +22,7 @@ public class SocketPlugin : IPlugin
         // 根据 Plugin Developer Guide，只要实现了 ICommunicator 且被 Host 加载，就会自动注册。
         // 所以这里主要做一些初始化日志。
         
-        context.Log(LogLevel.Info, $"插件 {Id} 已激活。");
+        context.Log(-1, LogLevel.Info, $"插件 {Id} 已激活。");
     }
 
     public async Task DeactivateAsync()

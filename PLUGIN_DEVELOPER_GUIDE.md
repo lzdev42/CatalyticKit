@@ -1,6 +1,6 @@
-# Catalytic 插件开发指南 (v0.4.1)
+# Catalytic 插件开发指南 (v0.5.2)
 
-*(更新日期: 2026-03-18 | SDK 版本: 0.5.0)*
+*(更新日期: 2026-03-21 | SDK 版本: 0.5.2)*
 
 ---
 
@@ -143,26 +143,27 @@ public class DemoPlugin : ICommunicator
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "🎉 插件已激活！");
+        _context.Log(-1, LogLevel.Info, "🎉 插件已激活！");
         return Task.CompletedTask;
     }
 
     // 插件停用时调用
     public Task DeactivateAsync()
     {
-        _context?.Log(LogLevel.Info, "👋 插件正在停用...");
+        _context?.Log(-1, LogLevel.Info, "👋 插件正在停用...");
         return Task.CompletedTask;
     }
 
     // 执行通讯动作
     public Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
         int timeoutMs,
         CancellationToken ct)
     {
-        _context?.Log(LogLevel.Debug, $"收到请求: address={address}, action={action}");
+        _context?.Log(slotIndex, LogLevel.Debug, $"收到请求: address={address}, action={action}");
         
         // 这里实现你的通讯逻辑
         // 示例：返回 "Hello" 的字节数组
@@ -171,13 +172,14 @@ public class DemoPlugin : ICommunicator
 
     // 高级版本（必须实现，可以直接调用上面的方法）
     public Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
         ExecuteOptions options,
         CancellationToken ct)
     {
-        return ExecuteAsync(address, action, payload, options.TimeoutMs, ct);
+        return ExecuteAsync(slotIndex, address, action, payload, options.TimeoutMs, ct);
     }
 }
 ```
@@ -400,6 +402,7 @@ public interface ICommunicator : IPlugin
     /// <summary>
     /// 执行通讯动作
     /// </summary>
+    /// <param name="slotIndex">关联的槽位索引</param>
     /// <param name="address">设备地址，格式由协议决定
     ///     串口: "COM3" 或 "/dev/ttyUSB0"
     ///     TCP: "192.168.1.100:5025"
@@ -413,6 +416,7 @@ public interface ICommunicator : IPlugin
     /// <param name="ct">取消令牌，当测试被停止时会触发取消</param>
     /// <returns>设备返回的数据，无数据时返回空数组</returns>
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address, 
         string action, 
         byte[] payload, 
@@ -422,6 +426,7 @@ public interface ICommunicator : IPlugin
     /// <summary>
     /// 执行通讯动作（带高级选项）
     /// </summary>
+    /// <param name="slotIndex">关联的槽位索引</param>
     /// <param name="address">设备地址</param>
     /// <param name="action">操作类型</param>
     /// <param name="payload">命令数据</param>
@@ -429,6 +434,7 @@ public interface ICommunicator : IPlugin
     /// <param name="ct">取消令牌</param>
     /// <returns>设备响应数据</returns>
     Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
@@ -482,7 +488,7 @@ public interface IProcessor : IPlugin
 }
 ```
 
-#### 获取运行参数 [NEW v0.5.0]
+#### 获取运行参数 [NEW v0.5.2]
 
 在“扩展模式”下，插件通常需要读取在 UI 界面配置的参数（如：数据库连接串、扫描枪指令、CSV 路径等）。
 
@@ -512,7 +518,7 @@ public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 > **原汁原味传输**：系统底层使用 Base64 对参数进行了封装，确保无论你在 UI 填入什么特殊字符（换行、引号、逗号），插件拿到的 `Params` 字符串都与 UI 输入的完全一致，不发生转义或截断。
 
 
-### 5.5 IInterceptor (拦截器) [NEW v0.5.0]
+### 5.5 IInterceptor (拦截器) [NEW v0.5.2]
 
 拦截器主要用于在每个步骤执行前进行“准入检查”，或在步骤执行后进行统一处理。
 
@@ -555,9 +561,10 @@ public interface IPluginContext
     /// 写日志到 Catalytic 日志系统
     /// 日志会显示在 UI 的系统日志面板中
     /// </summary>
+    /// <param name="slotIndex">槽位索引，-1 表示全局</param>
     /// <param name="level">日志级别: Debug / Info / Warning / Error</param>
     /// <param name="message">日志内容</param>
-    void Log(LogLevel level, string message);
+    void Log(int slotIndex, LogLevel level, string message);
 
     /// <summary>
     /// 获取其他通讯器（用于插件互调）
@@ -568,10 +575,11 @@ public interface IPluginContext
     ICommunicator? GetCommunicator(string protocolOrId);
 
     /// <summary>
-    /// 推送事件到 Catalytic
-    /// 用于设备主动推送数据（如 CAN 帧监控、设备报警）
-    /// </summary>
-    void PushEvent(string eventType, byte[] data);
+    /// <param name="slotIndex">关联的槽位索引</param>
+    /// <param name="address">关联的设备地址</param>
+    /// <param name="eventType">事件类型</param>
+    /// <param name="data">事件数据</param>
+    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
 
     /// <summary>
     /// 获取设备缓冲的数据（用于 Polling 模式）
@@ -607,19 +615,19 @@ SDK 提供这些扩展方法简化调用：
 
 ```csharp
 // 发送数据
-await communicator.SendAsync("COM3", data, ct);
+await communicator.SendAsync(slotIndex, "COM3", data, ct);
 
 // 读取数据
-byte[] response = await communicator.ReadAsync("COM3", timeoutMs: 1000, ct);
+byte[] response = await communicator.ReadAsync(slotIndex, "COM3", timeoutMs: 1000, ct);
 
 // 建立连接
-await communicator.ConnectAsync("COM3", timeoutMs: 5000, ct);
+await communicator.ConnectAsync(slotIndex, "COM3", timeoutMs: 5000, ct);
 
 // 断开连接
-await communicator.DisconnectAsync("COM3", ct);
+await communicator.DisconnectAsync(slotIndex, "COM3", ct);
 
 // 查询状态
-byte[] status = await communicator.GetStatusAsync("COM3", ct);
+byte[] status = await communicator.GetStatusAsync(slotIndex, "COM3", ct);
 ```
 
 ### 5.8 LogLevel（日志级别）
@@ -810,7 +818,7 @@ public class SerialCommunicator : ICommunicator
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(LogLevel.Info, "串口插件已激活");
+        _context.Log(-1, LogLevel.Info, "串口插件已激活");
         return Task.CompletedTask;
     }
 
@@ -833,6 +841,7 @@ public class SerialCommunicator : ICommunicator
     }
 
     public Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address, 
         string action, 
         byte[] payload, 
@@ -840,10 +849,11 @@ public class SerialCommunicator : ICommunicator
         CancellationToken ct)
     {
         // 兼容旧接口：构造默认 Options
-        return ExecuteAsync(address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
+        return ExecuteAsync(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
     }
 
     public async Task<byte[]> ExecuteAsync(
+        int slotIndex,
         string address,
         string action,
         byte[] payload,
@@ -866,22 +876,22 @@ public class SerialCommunicator : ICommunicator
             switch (commAction)
             {
                 case CommAction.Connect:
-                    return await ConnectAsync(port, options.TimeoutMs, ct);
+                    return await ConnectAsync(slotIndex, port, options.TimeoutMs, ct);
                     
                 case CommAction.Send:
                     // 关键：发送前清理无效数据，防止读取到上一个 Slot 的残留
                     if (port.IsOpen) port.DiscardInBuffer();
-                    return await SendAsync(port, payload, ct);
+                    return await SendAsync(slotIndex, port, payload, ct);
                     
                 case CommAction.Query:
                     if (port.IsOpen) port.DiscardInBuffer();
-                    return await QueryAsync(port, payload, options.TimeoutMs, options.Terminator, ct);
+                    return await QueryAsync(slotIndex, port, payload, options.TimeoutMs, options.Terminator, ct);
                     
                 case CommAction.Read:
-                    return await ReadAsync(port, options.TimeoutMs, options.Terminator, ct);
+                    return await ReadAsync(slotIndex, port, options.TimeoutMs, options.Terminator, ct);
                     
                 case CommAction.Disconnect:
-                    return await DisconnectAsync(port);
+                    return await DisconnectAsync(slotIndex, port);
                     
                 default:
                     return [];
@@ -894,18 +904,18 @@ public class SerialCommunicator : ICommunicator
         }
     }
 
-    private async Task<byte[]> ConnectAsync(SerialPort port, int timeoutMs, CancellationToken ct)
+    private async Task<byte[]> ConnectAsync(int slotIndex, SerialPort port, int timeoutMs, CancellationToken ct)
     {
         if (port.IsOpen)
         {
-            _context?.Log(LogLevel.Debug, $"[{port.PortName}] 已经打开");
+            _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 已经打开");
             return [];
         }
 
         try
         {
             port.Open();
-            _context?.Log(LogLevel.Info, $"[{port.PortName}] 连接成功");
+            _context?.Log(slotIndex, LogLevel.Info, $"[{port.PortName}] 连接成功");
             return [];
         }
         catch (Exception ex)
@@ -914,25 +924,25 @@ public class SerialCommunicator : ICommunicator
         }
     }
 
-    private Task<byte[]> DisconnectAsync(SerialPort port)
+    private Task<byte[]> DisconnectAsync(int slotIndex, SerialPort port)
     {
         if (port.IsOpen)
         {
             port.Close();
-            _context?.Log(LogLevel.Info, $"[{port.PortName}] 已断开");
+            _context?.Log(slotIndex, LogLevel.Info, $"[{port.PortName}] 已断开");
         }
         return Task.FromResult(Array.Empty<byte>());
     }
 
-    private Task<byte[]> SendAsync(SerialPort port, byte[] data, CancellationToken ct)
+    private Task<byte[]> SendAsync(int slotIndex, SerialPort port, byte[] data, CancellationToken ct)
     {
         EnsureOpen(port);
         port.Write(data, 0, data.Length);
-        _context?.Log(LogLevel.Debug, $"[{port.PortName}] 发送 {data.Length} 字节");
+        _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 发送 {data.Length} 字节");
         return Task.FromResult(Array.Empty<byte>());
     }
 
-    private async Task<byte[]> ReadAsync(SerialPort port, int timeoutMs, string? terminator, CancellationToken ct)
+    private async Task<byte[]> ReadAsync(int slotIndex, SerialPort port, int timeoutMs, string? terminator, CancellationToken ct)
     {
         EnsureOpen(port);
         port.ReadTimeout = timeoutMs > 0 ? timeoutMs : -1;
@@ -959,7 +969,7 @@ public class SerialCommunicator : ICommunicator
                 try 
                 {
                     string line = port.ReadLine();
-                    _context?.Log(LogLevel.Debug, $"[{port.PortName}] 读取行: {line.Trim()}");
+                    _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 读取行: {line.Trim()}");
                     return System.Text.Encoding.UTF8.GetBytes(line);
                 }
                 catch (TimeoutException)
@@ -970,7 +980,7 @@ public class SerialCommunicator : ICommunicator
 
             // 否则读取可用数据
             var count = port.Read(buffer, 0, buffer.Length);
-            _context?.Log(LogLevel.Debug, $"[{port.PortName}] 读取 {count} 字节");
+            _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 读取 {count} 字节");
             return buffer[..count];
         }
         catch (TimeoutException)
@@ -979,11 +989,11 @@ public class SerialCommunicator : ICommunicator
         }
     }
 
-    private async Task<byte[]> QueryAsync(SerialPort port, byte[] data, int timeoutMs, string? terminator, CancellationToken ct)
+    private async Task<byte[]> QueryAsync(int slotIndex, SerialPort port, byte[] data, int timeoutMs, string? terminator, CancellationToken ct)
     {
-        await SendAsync(port, data, ct);
+        await SendAsync(slotIndex, port, data, ct);
         await Task.Delay(50, ct); // 给设备一点处理时间
-        return await ReadAsync(port, timeoutMs, terminator, ct);
+        return await ReadAsync(slotIndex, port, timeoutMs, terminator, ct);
     }
 
     private byte[] GetStatus(SerialPort port)
@@ -1179,8 +1189,8 @@ public void OnConnectionLost(string address)
     // Payload 必须是 UTF8 编码的设备地址
     var payload = System.Text.Encoding.UTF8.GetBytes(address);
     
-    // 使用标准常量推送事件
-    _context?.PushEvent(PluginEvents.DeviceDisconnected, payload);
+    // 使用标准常量推送事件 (需包含 slotIndex 和 address)
+    _context?.PushEvent(-1, address, PluginEvents.DeviceDisconnected, payload);
     
     _context?.Log(LogLevel.Warning, $"[{address}] 检测到断线，已通知 Host");
 }
@@ -1190,10 +1200,10 @@ public void OnConnectionLost(string address)
 
 插件也可以定义自己的事件类型，供上层业务处理。
 ```csharp
-public void OnDataReceived(byte[] data)
+public void OnDataReceived(int slotIndex, byte[] data)
 {
-    // 推送自定义事件
-    _context?.PushEvent("can_frame", data);
+    // 推送自定义事件 (包含 slotIndex 和 address)
+    _context?.PushEvent(slotIndex, "device_address_here", "can_frame", data);
 }
 ```
 
@@ -1207,7 +1217,7 @@ public void OnDataReceived(byte[] data)
 ```csharp
 // ✅ 正确：推送到 Host 蓄水池，供 Low-code Engine 或 Business Plugin 读取
 // 使用便捷扩展方法
-_context?.PushDeviceData(address, System.Text.Encoding.UTF8.GetBytes("VOLT 5.003"));
+_context?.PushDeviceData(slotIndex, address, System.Text.Encoding.UTF8.GetBytes("VOLT 5.003"));
 ```
 
 ### 8.5 业务插件获取数据 (Processor Data Pull)
@@ -1391,6 +1401,6 @@ dotnet publish -c Release --self-contained false
 
 ---
 
-> **文档版本**: 0.4.1  
-> **最后更新**: 2026-03-11  
-> **适用 SDK 版本**: 0.4.1+
+> **文档版本**: 0.5.2  
+> **最后更新**: 2026-03-21  
+> **适用 SDK 版本**: 0.5.2+

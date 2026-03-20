@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CatalyticKit" Version="*" PrivateAssets="All" ExcludeAssets="Runtime" />
+        <ProjectReference Include="../../CatalyticKit/CatalyticKit/CatalyticKit.csproj" />
     </ItemGroup>
 
     <ItemGroup>
