@@ -12,6 +12,12 @@ public interface IHostBridge
     // --- 全局命令 (从插件到 Host) ---
 
     /// <summary>
+    /// 由插件主动记录自身专属的业务日志（如通讯明文报文）
+    /// Host 将负责将其专门分流到该插件的独立日志文件中
+    /// </summary>
+    void AddPluginLog(string pluginId, string message);
+
+    /// <summary>
     /// 获取当前 Host 配置的总 Slot 数量
     /// </summary>
     int GetSlotCount();
@@ -47,11 +53,6 @@ public interface IHostBridge
     /// 获取指定 Slot 的产品 SN
     /// </summary>
     string? SlotGetSN(int slotIndex);
-
-    /// <summary>
-    /// 设置指定 Slot 的流程变量
-    /// </summary>
-    void SlotSetVariable(int slotIndex, string name, string jsonValue);
 
     /// <summary>
     /// 获取指定 Slot 的流程变量

@@ -1,6 +1,6 @@
-# Catalytic 插件开发指南 (v0.5.2)
+# Catalytic 插件开发指南 (v0.5.3)
 
-*(更新日期: 2026-03-21 | SDK 版本: 0.5.2)*
+*(更新日期: 2026-03-23 | SDK 版本: 0.5.3)*
 
 ---
 
@@ -160,7 +160,7 @@ public class DemoPlugin : ICommunicator
         string address,
         string action,
         byte[] payload,
-        int timeoutMs,
+        ExecuteOptions options,
         CancellationToken ct)
     {
         _context?.Log(slotIndex, LogLevel.Debug, $"收到请求: address={address}, action={action}");
@@ -168,18 +168,6 @@ public class DemoPlugin : ICommunicator
         // 这里实现你的通讯逻辑
         // 示例：返回 "Hello" 的字节数组
         return Task.FromResult("Hello from plugin!"u8.ToArray());
-    }
-
-    // 高级版本（必须实现，可以直接调用上面的方法）
-    public Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address,
-        string action,
-        byte[] payload,
-        ExecuteOptions options,
-        CancellationToken ct)
-    {
-        return ExecuteAsync(slotIndex, address, action, payload, options.TimeoutMs, ct);
     }
 }
 ```
@@ -291,7 +279,6 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 | `Service.Slot(0).Start()` | 启动指定 Slot 测试（非阻塞）|
 | `Service.Slot(0).Stop()` | 停止指定 Slot 测试（非阻塞）|
 | `Service.Slot(0).SetSN("ABC")` | 设置产品 SN |
-| `Service.Slot(0).SetVariable(name, json)` | ⚠️ 无实际效果（变量由 Engine 步骤管理）|
 | `Service.Slot(0).GetVariable(name)` | 获取 Engine 提取的流程变量（只读）|
 | `Service.Slot(0).GetTestHistory()` | 获取本次测试完整记录（建议在 `TestFinished` 回调中调用）|
 
@@ -398,30 +385,6 @@ public interface ICommunicator : IPlugin
     /// 此名称会出现在 UI 的协议选择器中
     /// </summary>
     string Protocol { get; }
-    
-    /// <summary>
-    /// 执行通讯动作
-    /// </summary>
-    /// <param name="slotIndex">关联的槽位索引</param>
-    /// <param name="address">设备地址，格式由协议决定
-    ///     串口: "COM3" 或 "/dev/ttyUSB0"
-    ///     TCP: "192.168.1.100:5025"
-    ///     VISA: "TCPIP::192.168.1.100::INSTR"
-    /// </param>
-    /// <param name="action">动作类型，推荐使用 CommAction 枚举
-    ///     "connect" / "disconnect" / "send" / "read" / "query" / "status"
-    /// </param>
-    /// <param name="payload">要发送的数据</param>
-    /// <param name="timeoutMs">超时时间（毫秒），0 表示无超时</param>
-    /// <param name="ct">取消令牌，当测试被停止时会触发取消</param>
-    /// <returns>设备返回的数据，无数据时返回空数组</returns>
-    Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address, 
-        string action, 
-        byte[] payload, 
-        int timeoutMs, 
-        CancellationToken ct);
     
     /// <summary>
     /// 执行通讯动作（带高级选项）
@@ -580,14 +543,6 @@ public interface IPluginContext
     /// <param name="eventType">事件类型</param>
     /// <param name="data">事件数据</param>
     void PushEvent(int slotIndex, string address, string eventType, byte[] data);
-
-    /// <summary>
-    /// 获取设备缓冲的数据（用于 Polling 模式）
-    /// 调用后缓冲区会被清空
-    /// </summary>
-    /// <param name="deviceId">设备地址</param>
-    /// <returns>缓冲的数据，没有则返回空数组</returns>
-    byte[] GetDeviceData(string deviceId);
 }
 ```
 
@@ -840,18 +795,6 @@ public class SerialCommunicator : ICommunicator
         return Task.CompletedTask;
     }
 
-    public Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address, 
-        string action, 
-        byte[] payload, 
-        int timeoutMs, 
-        CancellationToken ct)
-    {
-        // 兼容旧接口：构造默认 Options
-        return ExecuteAsync(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-    }
-
     public async Task<byte[]> ExecuteAsync(
         int slotIndex,
         string address,
@@ -1058,7 +1001,7 @@ public class SerialCommunicator : ICommunicator
 ### 7.2 正确使用 CancellationToken
 
 ```csharp
-public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct)
+public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 {
     // ✅ 正确：在长时间操作前检查
     ct.ThrowIfCancellationRequested();
@@ -1103,7 +1046,13 @@ catch (Exception ex)
 ### 7.4 资源清理
 
 ```csharp
-public async Task<byte[]> ExecuteAsync(string address, string action, ...)
+public async Task<byte[]> ExecuteAsync(
+    int slotIndex, 
+    string address, 
+    string action, 
+    byte[] payload, 
+    ExecuteOptions options, 
+    CancellationToken ct)
 {
     Stream? stream = null;
     try
@@ -1120,7 +1069,7 @@ public async Task<byte[]> ExecuteAsync(string address, string action, ...)
 }
 
 // 或使用 using 语句
-public async Task<byte[]> ExecuteAsync(...)
+public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 {
     using var stream = File.OpenRead(path);
     // ... 自动释放 ...
@@ -1136,7 +1085,7 @@ public async Task<byte[]> ExecuteAsync(...)
 处理器可以调用其他通讯器：
 
 ```csharp
-public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct)
+public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 {
     // 获取串口通讯器
     var serial = _context?.GetCommunicator("acme.serial");
@@ -1218,34 +1167,6 @@ public void OnDataReceived(int slotIndex, byte[] data)
 // ✅ 正确：推送到 Host 蓄水池，供 Low-code Engine 或 Business Plugin 读取
 // 使用便捷扩展方法
 _context?.PushDeviceData(slotIndex, address, System.Text.Encoding.UTF8.GetBytes("VOLT 5.003"));
-```
-
-### 8.5 业务插件获取数据 (Processor Data Pull)
-
-业务插件（Processor）在执行计算任务时，可以通过 `GetDeviceData` 接口从 Host 蓄水池中拉取设备刚才推送的数据。
-
-```csharp
-// 在 IProcessor.ExecuteAsync 中
-public async Task<byte[]> ExecuteAsync(string parametersJson, CancellationToken ct)
-{
-    // 假设参数中指定了要处理的设备地址
-    var deviceAddress = "TCPIP0::..."; 
-    
-    // 从 Host 缓冲区拉取数据（拉取后缓冲区会被清空？取决于 Host 实现，当前实现为 GetAndClear）
-    // 注意：GetDeviceData 是非阻塞的，如果数据没来，返回空数组
-    var data = _context.GetDeviceData(deviceAddress);
-    
-    if (data.Length == 0)
-    {
-        _context.Log(LogLevel.Warning, "未获取到设备数据");
-        return Array.Empty<byte>();
-    }
-    
-    // 执行复杂计算 (如 FFT, 眼图分析)
-    var result = PerformComplexAnalysis(data);
-    
-    return result;
-}
 ```
 
 ---
@@ -1401,6 +1322,6 @@ dotnet publish -c Release --self-contained false
 
 ---
 
-> **文档版本**: 0.5.2  
-> **最后更新**: 2026-03-21  
-> **适用 SDK 版本**: 0.5.2+
+> **文档版本**: 0.5.3  
+> **最后更新**: 2026-03-23  
+> **适用 SDK 版本**: 0.5.3+

@@ -29,6 +29,16 @@ public static class Service
     // --- Global Commands ---
 
     /// <summary>
+    /// 记录当前插件的专属独立日志（如协议通讯报文）。
+    /// </summary>
+    public static void AddPluginLog(string pluginId, string message)
+    {
+        if (_bridge is not { } bridge)
+            throw new ServiceNotInitializedException();
+        bridge.AddPluginLog(pluginId, message);
+    }
+
+    /// <summary>
     /// 获取系统配置的总 Slot 数量
     /// </summary>
     /// <returns>Slot 数量</returns>

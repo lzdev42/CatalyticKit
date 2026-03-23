@@ -54,20 +54,6 @@ public class SocketCommunicator : ICommunicator
     }
 
     /// <summary>
-    /// 核心执行方法 (Thread-Safe)
-    /// </summary>
-    public async Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address,
-        string action,
-        byte[] payload,
-        int timeoutMs,
-        CancellationToken ct)
-    {
-        return await ExecuteAsync(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-    }
-
-    /// <summary>
     /// 执行通讯动作（带高级选项，全量加锁保护）
     /// </summary>
     public async Task<byte[]> ExecuteAsync(
@@ -78,6 +64,11 @@ public class SocketCommunicator : ICommunicator
         ExecuteOptions options,
         CancellationToken ct)
     {
+        var termFromHost = options.Terminator == null ? "NULL" : options.Terminator.Replace("\r", "\\r").Replace("\n", "\\n");
+        var payloadText = payload == null ? "EMPTY" : Encoding.UTF8.GetString(payload).Replace("\r","\\r").Replace("\n","\\n");
+        var termOnOption = options.Terminator == null ? "NULL" : options.Terminator.Replace("\r","\\r").Replace("\n","\\n");
+
+        Service.AddPluginLog(Id, $"[Host 入口] 动作:{action}, Payload文本:[{payloadText}], 参数中的Terminator:[{termOnOption}]");
         if (string.IsNullOrWhiteSpace(address))
             throw new ArgumentException("地址不能为空");
 
@@ -103,13 +94,15 @@ public class SocketCommunicator : ICommunicator
                         var sendClient = GetClientOrThrow(slotIndex, address);
                         sendClient.ClearBuffer(); // 核心：请求前强制清空，解决超时残留问题
                         var sendText = Encoding.UTF8.GetString(payload);
-                        await sendClient.SendAsync(sendText);
+                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (发送) {sendText}");
+                        await sendClient.SendAsync(sendText, options.Terminator);
                         _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已发送: {sendText}");
                         return Array.Empty<byte>();
 
                     case CommAction.Read:
                         var readClient = GetClientOrThrow(slotIndex, address);
-                        var data = await readClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, ct);
+                        var data = await readClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, options.Terminator, ct);
+                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (接收) {data}");
                         _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已读取 (Wait): {data}");
                         return Encoding.UTF8.GetBytes(data);
 
@@ -118,10 +111,12 @@ public class SocketCommunicator : ICommunicator
                         queryClient.ClearBuffer(); // 核心：请求前强制清空，解决超时残留问题
                         var queryText = Encoding.UTF8.GetString(payload);
                         
-                        await queryClient.SendAsync(queryText);
+                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (发送 Query) {queryText}");
+                        await queryClient.SendAsync(queryText, options.Terminator);
                         _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已发送 (Query): {queryText}");
                         
-                        var response = await queryClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, ct);
+                        var response = await queryClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, options.Terminator, ct);
+                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (接收 Query) {response}");
                         _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已接收 (Query): {response}");
                         return Encoding.UTF8.GetBytes(response);
 

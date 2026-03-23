@@ -14,7 +14,7 @@ public static class CommunicatorExtensions
             int timeoutMs,
             CancellationToken ct)
         {
-            return communicator.ExecuteAsync(slotIndex, address, action.ToString().ToLowerInvariant(), payload, timeoutMs, ct);
+            return communicator.ExecuteAsync(slotIndex, address, action.ToString().ToLowerInvariant(), payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
         }
 
         /// <summary>

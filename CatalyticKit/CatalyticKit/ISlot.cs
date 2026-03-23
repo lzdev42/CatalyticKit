@@ -54,13 +54,6 @@ public interface ISlot
     void SetSN(string sn);
 
     /// <summary>
-    /// 设置流程变量 (Context Variable)
-    /// </summary>
-    /// <param name="name">变量名</param>
-    /// <param name="jsonValue">变量值 (JSON 字符串)</param>
-    void SetVariable(string name, string jsonValue);
-
-    /// <summary>
     /// 获取流程变量
     /// </summary>
     /// <param name="name">变量名</param>

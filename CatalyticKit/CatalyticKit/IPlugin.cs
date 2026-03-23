@@ -38,12 +38,6 @@ public interface IPluginContext
     /// <param name="data">事件数据</param>
     void PushEvent(int slotIndex, string address, string eventType, byte[] data);
 
-    /// <summary>
-    /// 获取设备缓冲的数据 (用于 Polling 模式)
-    /// </summary>
-    /// <param name="deviceId">设备 ID (或 Address)</param>
-    /// <returns>被缓冲的数据，如果没有数据返回空数组</returns>
-    byte[] GetDeviceData(string deviceId);
 }
 
 /// <summary>
@@ -83,25 +77,7 @@ public interface ICommunicator : IPlugin
     /// 例如 "scpi"、"modbus"
     /// </summary>
     string Protocol { get; }
-    
-    /// <summary>
-    /// 执行通讯动作
-    /// </summary>
-    /// <param name="slotIndex">槽位索引</param>
-    /// <param name="address">设备地址，如 "COM3" 或 "192.168.1.100:5025"</param>
-    /// <param name="action">操作类型: "send"、"query"、"wait"</param>
-    /// <param name="payload">命令数据</param>
-    /// <param name="timeoutMs">超时时间（毫秒）</param>
-    /// <param name="ct">取消令牌</param>
-    /// <returns>设备响应数据</returns>
-    Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address, 
-        string action, 
-        byte[] payload, 
-        int timeoutMs, 
-        CancellationToken ct);
-    
+
     /// <summary>
     /// 执行通讯动作（带高级选项）
     /// </summary>

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
+using CatalyticKit;
 
 namespace SocketClient.Core;
 
@@ -93,12 +94,17 @@ public sealed class GenSocketClient : IDisposable
     /// 发送字符串，自动拼接结束符
     /// </summary>
     /// <exception cref="InvalidOperationException">未连接时抛出</exception>
-    public async Task SendAsync(string data)
+    public async Task SendAsync(string data, string? taskTerminator = null)
     {
         if (_stream is null)
             throw new InvalidOperationException("未连接，无法发送数据");
 
-        var bytes = _encoding.GetBytes(data + _terminator);
+        var term = taskTerminator ?? _terminator;
+        var textToSend = data.EndsWith(term) ? data : data + term;
+        var bytes = _encoding.GetBytes(textToSend);
+        // 只需要这一行，搞定所有拼装真相
+        Service.AddPluginLog("aka", $"[发往设备] 原始:[{data.Replace("\r","\\r").Replace("\n","\\n")}], 结束符:[{(taskTerminator ?? _terminator).Replace("\r","\\r").Replace("\n","\\n")}], 最终发送:[{textToSend.Replace("\r","\\r").Replace("\n","\\n")}]");
+
         await _stream.WriteAsync(bytes);
         await _stream.FlushAsync();
     }
@@ -112,13 +118,16 @@ public sealed class GenSocketClient : IDisposable
     /// 收到完整响应后自动清空缓冲区
     /// </summary>
     /// <param name="timeoutMs">超时毫秒</param>
+    /// <param name="taskTerminator">单次任务特定的结束符覆盖</param>
     /// <param name="ct">外部取消令牌</param>
     /// <returns>去掉结束符的响应字符串</returns>
     /// <exception cref="TimeoutException">超时未收到完整响应</exception>
-    public async Task<string> WaitAsync(int timeoutMs, CancellationToken ct = default)
+    public async Task<string> WaitAsync(int timeoutMs, string? taskTerminator = null, CancellationToken ct = default)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         linkedCts.CancelAfter(timeoutMs);
+
+        var term = taskTerminator ?? _terminator;
 
         try
         {
@@ -127,7 +136,7 @@ public sealed class GenSocketClient : IDisposable
                 lock (_bufferLock)
                 {
                     var content = _buffer.ToString();
-                    var idx = content.IndexOf(_terminator, StringComparison.Ordinal);
+                    var idx = content.IndexOf(term, StringComparison.Ordinal);
                     if (idx >= 0)
                     {
                         var result = content[..idx];
@@ -152,6 +161,8 @@ public sealed class GenSocketClient : IDisposable
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
+        Service.AddPluginLog("aka", "接受数据");
+
         var buf = new byte[4096];
         try
         {

@@ -105,17 +105,6 @@ public class SerialPortPlugin : ICommunicator
         return Task.CompletedTask;
     }
 
-    public Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address,
-        string action,
-        byte[] payload,
-        int timeoutMs,
-        CancellationToken ct)
-    {
-        return ExecuteAsync(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-    }
-
     /// <summary>
     /// 执行通讯动作 (全量原子化受锁保护)
     /// </summary>
