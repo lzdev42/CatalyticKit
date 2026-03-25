@@ -1,6 +1,31 @@
 namespace CatalyticKit;
 
 /// <summary>
+/// 插件阅知的设备连接状态
+/// </summary>
+public enum PluginDeviceConnectionState
+{
+    Connected,
+    Disconnected,
+}
+
+/// <summary>
+/// 插件事件类型枚举
+/// </summary>
+public enum PluginEventType
+{
+    /// <summary>
+    /// 任务执行结果 (对应引擎 SubmitResult)
+    /// </summary>
+    Result,
+
+    /// <summary>
+    /// 连接状态变化 (仅通知，不触发引擎判决)
+    /// </summary>
+    Status,
+}
+
+/// <summary>
 /// 插件上下文接口
 /// 在插件激活时传入，提供插件与 Catalytic 交互的能力
 /// </summary>
@@ -11,14 +36,6 @@ public interface IPluginContext
     /// 用于访问插件附带的资源文件
     /// </summary>
     string PluginDirectory { get; }
-    
-    /// <summary>
-    /// 通过 Catalytic 的日志系统输出日志
-    /// </summary>
-    /// <param name="slotIndex">触发此日志的槽位索引，-1 表示全局日志</param>
-    /// <param name="level">日志级别</param>
-    /// <param name="message">日志内容</param>
-    void Log(int slotIndex, LogLevel level, string message);
 
     /// <summary>
     /// 获取指定协议或 ID 的通讯器
@@ -29,15 +46,22 @@ public interface IPluginContext
     ICommunicator? GetCommunicator(string protocolOrId);
 
     /// <summary>
-    /// 推送事件到 Catalytic
-    /// 用于设备主动推送数据（如 CAN 帧监控、设备报警）
+    /// 向 Host 推送事件或任务结果
+    /// 当 eventType = Result 时，Host 将此数据作为当前步骤的结果提交给引擎进行判决
     /// </summary>
     /// <param name="slotIndex">关联的槽位索引</param>
     /// <param name="address">关联的设备地址</param>
     /// <param name="eventType">事件类型</param>
-    /// <param name="data">事件数据</param>
-    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
+    /// <param name="data">数据内容</param>
+    void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
 
+    /// <summary>
+    /// 向 Host 通知设备连接状态变化
+    /// Host 将根据 address 更新内部连接表并推送事件到 UI
+    /// </summary>
+    /// <param name="address">设备地址 (IP:port / COM3 / VISA 地址等)</param>
+    /// <param name="state">连接状态</param>
+    void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
 }
 
 /// <summary>
@@ -51,24 +75,24 @@ public interface IPlugin
     /// 格式建议: "公司.插件名"，例如 "acme.scpi-driver"
     /// </summary>
     string Id { get; }
-    
+
     /// <summary>
     /// 插件激活时调用
-    /// 在此进行初始化工作
+    /// 在此进行初始化工作（建立连接、注册回调、启动后台线程等）
     /// </summary>
     /// <param name="context">插件上下文</param>
     Task ActivateAsync(IPluginContext context);
-    
+
     /// <summary>
     /// 插件停用时调用
-    /// 在此进行清理工作
+    /// 在此进行清理工作（关闭连接、停止后台线程等）
     /// </summary>
     Task DeactivateAsync();
 }
 
 /// <summary>
 /// 通讯器接口 (Communicator)
-/// 用于处理设备通信协议 (原 ProtocolDriver)
+/// 用于处理设备通信协议
 /// </summary>
 public interface ICommunicator : IPlugin
 {
@@ -79,7 +103,9 @@ public interface ICommunicator : IPlugin
     string Protocol { get; }
 
     /// <summary>
-    /// 执行通讯动作（带高级选项）
+    /// 执行通讯任务
+    /// 插件应在此方法内部完成通讯动作，并通过 IPluginContext.PushEvent(PluginEventType.Result) 上报结果
+    /// 禁止通过 return 返回结果（返回值已无意义）
     /// </summary>
     /// <param name="slotIndex">槽位索引</param>
     /// <param name="address">设备地址</param>
@@ -87,12 +113,11 @@ public interface ICommunicator : IPlugin
     /// <param name="payload">命令数据</param>
     /// <param name="options">执行选项</param>
     /// <param name="ct">取消令牌</param>
-    /// <returns>设备响应数据</returns>
-    Task<byte[]> ExecuteAsync(
+    Task ExecuteTask(
         int slotIndex,
         string address,
-        string action,
-        byte[] payload,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct);
 }
@@ -106,13 +131,18 @@ public class ExecuteOptions
     /// 超时时间（毫秒）
     /// </summary>
     public int TimeoutMs { get; set; }
-    
+
     /// <summary>
     /// 响应结束符（如 "\n"）
     /// 如果指定，通讯器收到该字符后返回响应
     /// 如果不指定，通讯器立即返回收到的数据
     /// </summary>
     public string? Terminator { get; set; }
+
+    /// <summary>
+    /// 是否为共享设备类型
+    /// </summary>
+    public bool IsShared { get; set; }
 }
 
 /// <summary>
@@ -126,7 +156,7 @@ public interface IProcessor : IPlugin
     /// 此名称用于在低代码脚本或配置中引用此插件执行特定操作。
     /// </summary>
     string TaskName { get; }
-    
+
     /// <summary>
     /// 执行处理逻辑
     /// </summary>

@@ -1,29 +1,25 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.RegularExpressions;
 using CatalyticKit;
 using SocketClient.Core;
 
 namespace SocketClient.Plugin;
 
-/// <summary>
-/// 插件业务异常，用于替代系统级的 InvalidOperationException
-/// </summary>
-public sealed class SocketPluginException(string message) : Exception(message);
-
-/// <summary>
-/// 通用 Socket 插件适配器
-/// 负责将 ICommunicator 接口调用映射到 GenSocketClient
-/// </summary>
 public class SocketCommunicator : ICommunicator
 {
     private IPluginContext? _context;
     
-    // 管理多路连接: Key = "IP:Port"
-    private readonly ConcurrentDictionary<string, GenSocketClient> _clients = new();
+    // 管理多个连接: Key = Address (IP:Port)
+    private readonly ConcurrentDictionary<string, AsyncBaseClient> _clients = new();
+    
+    // 管理背景读取任务的取消令牌: Key = Address
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _readerCts = new();
+    
+    // 管理地址到 SlotIndex 的映射 (仅用于 isShared = false)
+    private readonly ConcurrentDictionary<string, int> _addressToSlot = new();
 
-    // 管理地址级并发锁: Key = "IP:Port"
-    // 确保同一个地址的 Connect/Send/Read/Disconnect 在多 Slot 间互斥排队
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _addressLocks = new();
+    private readonly Regex _slotRegex = new(@"\d+", RegexOptions.Compiled);
 
     public string Id => "catalytic.socket-client";
     public string Protocol => "tcp";
@@ -31,185 +27,185 @@ public class SocketCommunicator : ICommunicator
     public Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(-1, LogLevel.Info, "通用 Socket 客户端插件 (线程安全版) 已激活");
+        Service.AddPluginLog(Id, "Socket 通讯插件已激活");
         return Task.CompletedTask;
     }
 
-    public Task DeactivateAsync()
+    public async Task DeactivateAsync()
     {
+        Service.AddPluginLog(Id, "Socket 通讯插件正在停用...");
+        
+        // 停止所有背景读取任务
+        foreach (var cts in _readerCts.Values)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+        _readerCts.Clear();
+
+        // 释放所有连接
         foreach (var client in _clients.Values)
         {
             client.Dispose();
         }
         _clients.Clear();
+        _addressToSlot.Clear();
 
-        foreach (var semaphore in _addressLocks.Values)
-        {
-            try { semaphore.Dispose(); } catch { }
-        }
-        _addressLocks.Clear();
-
-        _context?.Log(-1, LogLevel.Info, "通用 Socket 客户端插件已停用");
-        return Task.CompletedTask;
+        await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 执行通讯动作（带高级选项，全量加锁保护）
-    /// </summary>
-    public async Task<byte[]> ExecuteAsync(
+    public async Task ExecuteTask(
         int slotIndex,
-        string address,
-        string action,
-        byte[] payload,
+
+        address,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct)
     {
-        var termFromHost = options.Terminator == null ? "NULL" : options.Terminator.Replace("\r", "\\r").Replace("\n", "\\n");
-        var payloadText = payload == null ? "EMPTY" : Encoding.UTF8.GetString(payload).Replace("\r","\\r").Replace("\n","\\n");
-        var termOnOption = options.Terminator == null ? "NULL" : options.Terminator.Replace("\r","\\r").Replace("\n","\\n");
-
-        Service.AddPluginLog(Id, $"[Host 入口] 动作:{action}, Payload文本:[{payloadText}], 参数中的Terminator:[{termOnOption}]");
         if (string.IsNullOrWhiteSpace(address))
             throw new ArgumentException("地址不能为空");
 
-        // 1. 获取该地址的专用信号量
-        var semaphore = _addressLocks.GetOrAdd(address, _ => new SemaphoreSlim(1, 1));
-
-        // 2. 获取锁
-        await semaphore.WaitAsync(ct);
-
         try
         {
-            if (Enum.TryParse<CommAction>(action, true, out var commAction))
+            switch (action)
             {
-                switch (commAction)
-                {
-                    case CommAction.Connect:
-                        return await HandleConnectInternal(slotIndex, address, options.TimeoutMs, options.Terminator);
+                case CommAction.Connect:
+                    await HandleConnect(slotIndex, address, options, ct);
+                    break;
 
-                    case CommAction.Disconnect:
-                        return HandleDisconnectInternal(slotIndex, address);
+                case CommAction.Disconnect:
+                    await HandleDisconnect(address);
+                    break;
 
-                    case CommAction.Send:
-                        var sendClient = GetClientOrThrow(slotIndex, address);
-                        sendClient.ClearBuffer(); // 核心：请求前强制清空，解决超时残留问题
-                        var sendText = Encoding.UTF8.GetString(payload);
-                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (发送) {sendText}");
-                        await sendClient.SendAsync(sendText, options.Terminator);
-                        _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已发送: {sendText}");
-                        return Array.Empty<byte>();
+                case CommAction.Send:
+                case CommAction.Query:
+                    // 无论是 Send 还是 Query，在 SocketClient 中由于是异步解析返回，
+                    // 这里只负责发送。Query 的结果会由 BackgroundReadLoop 通过 PushEvent 返回。
+                    await HandleSend(slotIndex, address, payload);
+                    break;
 
-                    case CommAction.Read:
-                        var readClient = GetClientOrThrow(slotIndex, address);
-                        var data = await readClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, options.Terminator, ct);
-                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (接收) {data}");
-                        _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已读取 (Wait): {data}");
-                        return Encoding.UTF8.GetBytes(data);
+                case CommAction.Read:
+                    // 由于后台读取循环一直在运行，Read 动作在这里通常不需要额外操作。
+                    Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] Read 动作已由后台循环处理");
+                    break;
 
-                    case CommAction.Query:
-                        var queryClient = GetClientOrThrow(slotIndex, address);
-                        queryClient.ClearBuffer(); // 核心：请求前强制清空，解决超时残留问题
-                        var queryText = Encoding.UTF8.GetString(payload);
-                        
-                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (发送 Query) {queryText}");
-                        await queryClient.SendAsync(queryText, options.Terminator);
-                        _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已发送 (Query): {queryText}");
-                        
-                        var response = await queryClient.WaitAsync(options.TimeoutMs == 0 ? 5000 : options.TimeoutMs, options.Terminator, ct);
-                        Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] (接收 Query) {response}");
-                        _context?.Log(slotIndex, LogLevel.Debug, $"[{address}] 已接收 (Query): {response}");
-                        return Encoding.UTF8.GetBytes(response);
-
-                    case CommAction.Status:
-                        bool connected = _clients.TryGetValue(address, out var c) && c.IsConnected;
-                        return connected ? "1"u8.ToArray() : "0"u8.ToArray();
-                }
+                case CommAction.Status:
+                    bool isConnected = _clients.TryGetValue(address, out _);
+                    // 注意：Status 通常不通过 PushEvent 返回 Result，而是直接查询或由 NotifyConnectionStateChanged 维护
+                    break;
             }
-
-            throw new ArgumentException($"不支持的动作类型: {action}");
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (TimeoutException ex)
-        {
-            _context?.Log(slotIndex, LogLevel.Warning, $"[{Id}] 在地址 {address} 执行动作 '{action}' 超时: {ex.Message}");
-            throw;
         }
         catch (Exception ex)
         {
-            _context?.Log(slotIndex, LogLevel.Error, $"[{Id}] 在地址 {address} 执行动作 '{action}' 失败: {ex.Message}");
+            Service.AddPluginLog(Id, $"[Slot {slotIndex}] [Error] 执行动作 '{action}' 失败: {ex.Message}");
             throw;
         }
-        finally
+    }
+
+    private async Task HandleConnect(int slotIndex, string address, ExecuteOptions options, CancellationToken ct)
+    {
+        if (_clients.TryGetValue(address, out _))
         {
-            semaphore.Release();
+            Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] 已经处于连接状态");
+            return;
+        }
+
+        var client = new AsyncBaseClient(address, options.Terminator ?? "\n", options.Terminator ?? "\n");
+        await client.ConnectAsync();
+
+        if (_clients.TryAdd(address, client))
+        {
+            // 记录地址到槽位的映射 (仅用于非共享模式分发)
+            if (!options.IsShared)
+            {
+                _addressToSlot[address] = slotIndex;
+            }
+
+            // 启动背景读取任务
+            var cts = new CancellationTokenSource();
+            if (_readerCts.TryAdd(address, cts))
+            {
+                _ = Task.Run(() => BackgroundReadLoop(address, client, options.IsShared, cts.Token), cts.Token);
+            }
+
+            _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Connected);
+            Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] 连接成功 (Shared={options.IsShared})");
         }
     }
 
-    // --- 内部处理方法 ---
-
-    private async Task<byte[]> HandleConnectInternal(int slotIndex, string address, int timeoutMs, string? terminator)
+    private async Task HandleDisconnect(string address)
     {
-        if (_clients.TryGetValue(address, out var existing) && existing.IsConnected)
+        if (_readerCts.TryRemove(address, out var cts))
         {
-            _context?.Log(slotIndex, LogLevel.Info, $"[{address}] 设备已处于连接状态");
-            return Array.Empty<byte>();
+            cts.Cancel();
+            cts.Dispose();
         }
 
-        if (!TryParseAddress(address, out var host, out var port))
-            throw new ArgumentException($"地址格式错误: {address}。应为 IP:Port 分隔格式");
-
-        // 使用 options 中的结束符，若无则使用默认 \r\n
-        var client = new GenSocketClient(terminator ?? "\r\n");
-
-        client.Disconnected += () =>
-        {
-            // 使用新版 PushEvent，包含 slotIndex 和 address
-            _context?.PushEvent(slotIndex, address, PluginEvents.DeviceDisconnected, Encoding.UTF8.GetBytes(address));
-            _context?.Log(slotIndex, LogLevel.Warning, $"[{address}] 远端探测到断开连接");
-        };
-
-        await client.ConnectAsync(host, port, timeoutMs);
-
-        _clients[address] = client;
-        _context?.Log(slotIndex, LogLevel.Info, $"[{address}] 连接成功 (Terminator: {terminator ?? "\\r\\n"})");
-        return Array.Empty<byte>();
-    }
-
-    private byte[] HandleDisconnectInternal(int slotIndex, string address)
-    {
         if (_clients.TryRemove(address, out var client))
         {
-            client.Disconnect();
             client.Dispose();
-            _context?.Log(slotIndex, LogLevel.Info, $"[{address}] 已人工断开连接");
+            _addressToSlot.TryRemove(address, out _);
+            _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Disconnected);
+            Service.AddPluginLog(Id, $"[{address}] 已断开连接");
         }
-        return Array.Empty<byte>();
+
+        await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 获取客户端并检查连接状态
-    /// </summary>
-    private GenSocketClient GetClientOrThrow(int slotIndex, string address)
+    private async Task HandleSend(int slotIndex, string address, string payload)
     {
-        if (_clients.TryGetValue(address, out var client) && client.IsConnected)
+        if (_clients.TryGetValue(address, out var client))
         {
-            return client;
+            await client.SendAsync(payload);
+            Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] 已发送指令: {payload}");
         }
-
-        throw new SocketPluginException($"设备 [{address}] 未连接，请先执行 Connect 动作");
+        else
+        {
+            throw new InvalidOperationException($"设备 [{address}] 未连接，请先执行 Connect");
+        }
     }
 
-    private bool TryParseAddress(string address, out string host, out int port)
+    private async Task BackgroundReadLoop(string address, AsyncBaseClient client, bool isShared, CancellationToken ct)
     {
-        host = "";
-        port = 0;
-        var parts = address.Split(':');
-        if (parts.Length != 2) return false;
-        if (!int.TryParse(parts[1], out port)) return false;
-        host = parts[0];
-        return true;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                string msg = await client.ReceiveNextAsync();
+                int targetSlot = -1;
+
+                if (isShared)
+                {
+                    // 共享模式：使用正则表达式提取第一个数字 (1-based -> 0-based)
+                    var match = _slotRegex.Match(msg);
+                    if (match.Success && int.TryParse(match.Value, out int slotNum))
+                    {
+                        targetSlot = slotNum - 1;
+                    }
+                }
+                else
+                {
+                    // 独占模式：使用建立连接时记录的槽位
+                    _addressToSlot.TryGetValue(address, out targetSlot);
+                }
+
+                if (targetSlot >= 0)
+                {
+                    _context?.PushEvent(targetSlot, address, PluginEventType.Result, msg);
+                }
+                else
+                {
+                    Service.AddPluginLog(Id, $"[{address}] 无法识别目标槽位的返回数据: {msg}");
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Service.AddPluginLog(Id, $"[{address}] 背景读取循环发生异常: {ex.Message}");
+            // 如果连接意外断开，触发清理
+            _ = HandleDisconnect(address);
+        }
     }
 }

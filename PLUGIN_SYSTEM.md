@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.5.2 | Updated: 2026-03-21
+> SDK Version: 0.6.0 | Updated: 2026-03-25
 
 ## Overview
 
@@ -83,21 +83,12 @@ public interface ICommunicator : IPlugin
 {
     string Protocol { get; }
     
-    // Basic execution
-    Task<byte[]> ExecuteAsync(
-        int slotIndex,
-        string address, 
-        string action, 
-        byte[] payload, 
-        int timeoutMs, 
-        CancellationToken ct);
-    
-    // Advanced execution with options
-    Task<byte[]> ExecuteAsync(
+    // Execute task (no return value, result reported via PushEvent)
+    Task ExecuteTask(
         int slotIndex,
         string address,
-        string action,
-        byte[] payload,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct);
 }
@@ -105,7 +96,8 @@ public interface ICommunicator : IPlugin
 public class ExecuteOptions
 {
     public int TimeoutMs { get; set; }
-    public string? Terminator { get; set; }  // e.g. "\n"
+    public string? Terminator { get; set; }      // Serialized delimiter
+    public bool IsShared { get; set; }          // Dedicated vs Shared Resource Mode
 }
 ```
 
@@ -120,7 +112,7 @@ public interface IProcessor : IPlugin
 }
 ```
 
-### IInterceptor [NEW v0.5.2]
+### IInterceptor
 
 ```csharp
 public interface IInterceptor : IPlugin
@@ -201,7 +193,8 @@ During Runtime
     │
     ├─ Engine sends EngineTaskCallback(protocol="scpi")
     ├─ Host finds matching plugin
-    └─ Host calls plugin.ExecuteAsync()
+    └─ Host calls plugin.ExecuteTask()
+       (Plugin later calls context.PushEvent to report result)
 
 Host Shutdown
     │
@@ -220,26 +213,20 @@ public interface IPluginContext
     /// Plugin's directory path (for accessing bundled resources)
     string PluginDirectory { get; }
     
-    /// Log a message (forwarded to Host's logging system)
-    /// @param slotIndex Slot index, -1 for global logs
-    void Log(int slotIndex, LogLevel level, string message);
-    
     /// Get another protocol driver (for inter-plugin communication)
     ICommunicator? GetCommunicator(string protocolOrId);
     
-    /// Push event to Host (e.g. device disconnect, async data)
-    /// @param slotIndex Associated slot index
-    /// @param address Associated device address
-    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
-    
-    /// Get buffered device data (for polling mode)
-    byte[] GetDeviceData(string deviceId);
+    /// Push event to Host (Result will be routed to Engine)
+    void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
+
+    /// Notify device connection state change (Routed to DeviceManager by address)
+    void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
 }
 ```
 
 ---
 
-## Parameter Transmission Design (v0.5.2)
+## Parameter Transmission Design
 
 For `HostControlled` tasks (Extended mode), the system provides a **"Raw Conduit"** for custom parameters.
 
@@ -269,6 +256,7 @@ Plugins can actively control the test flow via the static `Service` class:
 
 ```csharp
 // Global commands
+Service.AddPluginLog(id, msg);   // Record plugin specific log
 Service.StartAll();              // Start all slots
 
 // Per-slot commands
@@ -306,6 +294,7 @@ Host provides the actual implementation via `Service.SetBridge(bridge)` at start
 public interface IHostBridge
 {
     // Global Commands
+    void AddPluginLog(string pluginId, string message); // 记录日志
     void StartAll();
     void StopAll();
 
@@ -317,7 +306,7 @@ public interface IHostBridge
     string? SlotGetVariable(int slotIndex, string name);  // Reads from Engine VariablePool
     TestRecord? SlotGetHistory(int slotIndex);  // Returns full typed test history; call after TestFinished
     
-    // Global flow info [NEW v0.4.1]
+    // Global flow info
     FlowDefinition? GetFlowDefinition();
     string GetReportFolder();
 

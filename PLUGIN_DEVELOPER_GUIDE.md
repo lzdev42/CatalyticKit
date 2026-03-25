@@ -387,28 +387,33 @@ public interface ICommunicator : IPlugin
     string Protocol { get; }
     
     /// <summary>
-    /// 执行通讯动作（带高级选项）
+    /// 执行通讯任务
+    /// 禁止通过 return 返回结果，结果必须通过 context.PushEvent(PluginEventType.Result) 上报
     /// </summary>
-    /// <param name="slotIndex">关联的槽位索引</param>
-    /// <param name="address">设备地址</param>
-    /// <param name="action">操作类型</param>
-    /// <param name="payload">命令数据</param>
-    /// <param name="options">执行选项（包含超时和结束符）</param>
-    /// <param name="ct">取消令牌</param>
-    /// <returns>设备响应数据</returns>
-    Task<byte[]> ExecuteAsync(
+    Task ExecuteTask(
         int slotIndex,
         string address,
-        string action,
-        byte[] payload,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct);
 }
 ```
 
+#### ExecuteTask 参数说明
+
+| 参数 | 类型 | 语义 |
+|---|---|---|
+| `slotIndex` | `int` | 调用此任务的槽位索引（0-based）。插件必须将此值原封不动地传入 `PushEvent`，以保证结果能正确路由回对应的 Engine 任务 |
+| `address` | `string` | 目标设备地址，格式取决于协议（如 `192.168.1.1:5025`、`COM3`、`GPIB0::5::INSTR`） |
+| `action` | `CommAction` | 操作意图，见下方 5.6 CommAction 说明 |
+| `payload` | `string` | 操作的指令内容（如 SCPI 指令 `MEAS:VOLT:DC?`，对于纯读取类操作则为空字符串） |
+| `options` | `ExecuteOptions` | 超时、结束符、资源模式等运行层选项 |
+| `ct` | `CancellationToken` | 取消令牌，当测试被停止时触发，应将其传入底层 IO 操作 |
+
 ### 5.3 ExecuteOptions（执行选项）
 
-用于传递高级通讯参数，如超时时间和响应结束符。
+用于传递运行层选项。
 
 ```csharp
 public class ExecuteOptions
@@ -420,13 +425,37 @@ public class ExecuteOptions
     
     /// <summary>
     /// 响应结束符（如 "\n"、"\r"）
-    /// - **如果不为空**: 插件需持续读取，直到遇到该结束符才视为一条完整消息并返回。
-    /// - **如果为空**: (即 Raw 模式) 插件应立即返回当前缓冲区的所有可用数据。
-    /// **注意**: UI 传入的通常是转义后的字符串（如 "\\n"），SDK 在传递给插件前会自动反转义为真实控制字符。
+    /// - 不为空时：插件应持续读取直至遭遇此字符，将完整响应内容通过 PushEvent 上报
+    /// - 为空时（Raw 模式）：插件应立即返回当前缓冲区的全部可用数据
+    /// 注意：UI 传入的是转义后的字符串（如 "\\n"），SDK 在传递给插件前会自动反转义为真实控制字符
     /// </summary>
     public string? Terminator { get; set; }
+
+    /// <summary>
+    /// 设备资源模式，来源于 DeviceType 配置中的 IsShared 字段
+    ///
+    /// false — 独占资源模式 (Dedicated Resource Mode)
+    ///         每个槽位 (Slot) 对应一个独立的硬件实例。
+    ///         Host 保证不同槽位的调用不会路由到同一 address。
+    ///         插件无需内部并发控制。
+    ///
+    /// true  — 共享资源模式 (Shared Resource Mode)
+    ///         多个槽位的调用均路由到同一 address。
+    ///         插件必须自行处理并发访问冲突（序列化队列或互斥锁）。
+    /// </summary>
+    public bool IsShared { get; set; }
 }
 ```
+
+> [!NOTE]
+> **独占资源模式 vs 共享资源模式**
+>
+> | | 独占资源模式 | 共享资源模式 |
+> |---|---|---|
+> | **硬件映射** | N Slots : N 硬件实例 | N Slots : 1 硬件端点 |
+> | **地址关系** | 每个槽位对应独立地址 | 所有槽位路由至同一地址 |
+> | **并发冲突** | 天然隔离，无冲突 | 插件必须自行序列化 |
+> | `IsShared` | `false` | `true` |
 
 ### 5.4 IProcessor（处理器）
 
@@ -519,30 +548,26 @@ public interface IPluginContext
     /// 用于访问插件附带的资源文件（如配置文件、固件等）
     /// </summary>
     string PluginDirectory { get; }
-    
-    /// <summary>
-    /// 写日志到 Catalytic 日志系统
-    /// 日志会显示在 UI 的系统日志面板中
-    /// </summary>
-    /// <param name="slotIndex">槽位索引，-1 表示全局</param>
-    /// <param name="level">日志级别: Debug / Info / Warning / Error</param>
-    /// <param name="message">日志内容</param>
-    void Log(int slotIndex, LogLevel level, string message);
 
     /// <summary>
     /// 获取其他通讯器（用于插件互调）
-    /// 典型用途：处理器插件需要调用串口通讯器发送命令
+    /// 典型用途：处理器插件需要调用底层通讯插件发送指令
     /// </summary>
     /// <param name="protocolOrId">协议名（如 "serial"）或插件 ID</param>
     /// <returns>通讯器实例，未找到返回 null</returns>
     ICommunicator? GetCommunicator(string protocolOrId);
 
     /// <summary>
-    /// <param name="slotIndex">关联的槽位索引</param>
-    /// <param name="address">关联的设备地址</param>
-    /// <param name="eventType">事件类型</param>
-    /// <param name="data">事件数据</param>
-    void PushEvent(int slotIndex, string address, string eventType, byte[] data);
+    /// 向 Host 推送任务结果或状态事件
+    /// 当 eventType = Result 时，Host 将此数据作为当前步骤结果提交给引擎进行判决
+    /// </summary>
+    void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
+
+    /// <summary>
+    /// 向 Host 通知设备连接状态变化
+    /// Host 将根据 address 更新内部连接表，UI 将在下次轮询时得到新状态
+    /// </summary>
+    void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
 }
 ```
 

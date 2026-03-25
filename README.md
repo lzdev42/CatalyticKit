@@ -31,14 +31,12 @@ public class MyPlugin : ICommunicator
     public Task ActivateAsync(IPluginContext context) => Task.CompletedTask;
     public Task DeactivateAsync() => Task.CompletedTask;
 
-    public Task<byte[]> ExecuteAsync(int slotIndex, string address, string action, byte[] payload, int timeoutMs, CancellationToken ct)
+    public Task<string> ExecuteAsync(int slotIndex, string address, CommAction action, string payload, ExecuteOptions options, CancellationToken ct)
     {
+        Service.AddPluginLog(Id, $"[Slot {slotIndex}] Executing {action} on {address}");
         // 你的通讯逻辑
-        return Task.FromResult(Array.Empty<byte>());
+        return Task.FromResult("OK");
     }
-
-    public Task<byte[]> ExecuteAsync(int slotIndex, string address, string action, byte[] payload, ExecuteOptions options, CancellationToken ct)
-        => ExecuteAsync(slotIndex, address, action, payload, options.TimeoutMs, ct);
 }
 ```
 

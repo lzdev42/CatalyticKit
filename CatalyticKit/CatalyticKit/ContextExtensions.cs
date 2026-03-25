@@ -3,11 +3,12 @@ namespace CatalyticKit;
 public static class ContextExtensions
 {
     /// <summary>
-    /// 推送设备数据 (便捷方法)
-    /// 自动将 Address 编码进 EventType: "DeviceData:{address}"
+    /// 推送任务结果 (便捷方法)
+    /// 等价于 PushEvent(slotIndex, address, PluginEventType.Result, data)
+    /// 调用后 Host 将立即将数据提交给引擎进行判决
     /// </summary>
-    public static void PushDeviceData(this IPluginContext context, int slotIndex, string address, byte[] data)
+    public static void PushResult(this IPluginContext context, int slotIndex, string address, string data)
     {
-        context.PushEvent(slotIndex, address, $"{PluginEvents.DeviceData}:{address}", data);
+        context.PushEvent(slotIndex, address, PluginEventType.Result, data);
     }
 }
