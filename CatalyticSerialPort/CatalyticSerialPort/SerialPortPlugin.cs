@@ -108,7 +108,7 @@ public class SerialPortPlugin : ICommunicator
     /// <summary>
     /// 执行通讯动作 (全量原子化受锁保护)
     /// </summary>
-    public async Task<string> ExecuteAsync(
+    public async Task ExecuteTask(
         int slotIndex,
         string address,
         CommAction action,
@@ -132,24 +132,33 @@ public class SerialPortPlugin : ICommunicator
             switch (action)
             {
                 case CommAction.Connect:
-                    return await HandleConnectInternal(slotIndex, portName, baudRate, options.Terminator);
+                    await HandleConnectInternal(slotIndex, portName, baudRate, options.Terminator);
+                    break;
 
                 case CommAction.Disconnect:
-                    return HandleDisconnectInternal(slotIndex, portName);
+                    HandleDisconnectInternal(slotIndex, portName);
+                    break;
 
                 case CommAction.Send:
                     var sendPort = GetWrapperOrThrow(slotIndex, portName).Port;
                     sendPort.DiscardInBuffer(); // 补丁：发送前清理残留脏数据
                     sendPort.Write(payload ?? "");
                     Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 已发送 {payload?.Length ?? 0} 字符");
-                    return "";
+                    break;
 
                 case CommAction.Read:
                     var readPort = GetWrapperOrThrow(slotIndex, portName).Port;
                     var data = readPort.ReadExisting();
                     if (!string.IsNullOrEmpty(data))
+                    {
                         Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 已读取 {data.Length} 字符");
-                    return data;
+                        _context?.PushEvent(slotIndex, portName, PluginEventType.Result, data);
+                    }
+                    else
+                    {
+                        _context?.PushEvent(slotIndex, portName, PluginEventType.Result, "");
+                    }
+                    break;
 
                 case CommAction.Query:
                     var queryPort = GetWrapperOrThrow(slotIndex, portName).Port;
@@ -162,11 +171,14 @@ public class SerialPortPlugin : ICommunicator
                     var queryData = queryPort.ReadExisting();
                     if (!string.IsNullOrEmpty(queryData))
                         Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 已接收 (Query) {queryData.Length} 字符");
-                    return queryData;
+                    
+                    _context?.PushEvent(slotIndex, portName, PluginEventType.Result, queryData ?? "");
+                    break;
 
                 case CommAction.Status:
                     bool isOpen = _ports.TryGetValue(portName, out var w) && w.Port.IsOpen;
-                    return isOpen ? "1" : "0";
+                    _context?.PushEvent(slotIndex, portName, PluginEventType.Result, isOpen ? "1" : "0");
+                    break;
             }
 
             throw new ArgumentException($"不支持的动作类型: {action}");
@@ -188,12 +200,12 @@ public class SerialPortPlugin : ICommunicator
 
     // --- 内部处理方法 ---
 
-    private Task<string> HandleConnectInternal(int slotIndex, string portName, int baudRate, string? terminator)
+    private async Task HandleConnectInternal(int slotIndex, string portName, int baudRate, string? terminator)
     {
         if (_ports.TryGetValue(portName, out var existing) && existing.Port.IsOpen)
         {
             Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 设备已处于连接状态");
-            return Task.FromResult("");
+            return;
         }
         
         try
@@ -226,9 +238,7 @@ public class SerialPortPlugin : ICommunicator
                             try
                             {
                                 var line = sp.ReadLine();
-                                // 注意：此处 Event 推送依然支持字节数组，但 Execute 返回值已切为 string
-                                var data = Encoding.UTF8.GetBytes(line);
-                                _context?.PushEvent(slotIndex, portName, $"{PluginEvents.DeviceData}:{portName}", data);
+                                _context?.PushEvent(slotIndex, portName, PluginEventType.Result, line);
                             }
                             catch (TimeoutException) { break; }
                             catch (InvalidOperationException) { break; }
@@ -242,7 +252,7 @@ public class SerialPortPlugin : ICommunicator
             port.Open();
             _ports[portName] = wrapper;
             Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 已连接，波特率 {baudRate} (线程安全模式)");
-            return Task.FromResult("");
+            _context?.NotifyConnectionStateChanged(portName, PluginDeviceConnectionState.Connected);
         }
         catch (UnauthorizedAccessException)
         {
@@ -254,7 +264,7 @@ public class SerialPortPlugin : ICommunicator
         }
     }
 
-    private string HandleDisconnectInternal(int slotIndex, string portName)
+    private void HandleDisconnectInternal(int slotIndex, string portName)
     {
         if (_ports.TryRemove(portName, out var wrapper))
         {
@@ -262,13 +272,13 @@ public class SerialPortPlugin : ICommunicator
             {
                 wrapper.Dispose();
                 Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 已断开连接");
+                _context?.NotifyConnectionStateChanged(portName, PluginDeviceConnectionState.Disconnected);
             }
             catch (Exception ex)
             {
                 Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{portName}] 断开连接时发生错误: {ex.Message}");
             }
         }
-        return "";
     }
 
     private PortWrapper GetWrapperOrThrow(int slotIndex, string portName)

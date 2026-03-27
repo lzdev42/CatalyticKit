@@ -51,7 +51,12 @@ public interface ISlot
     /// <summary>
     /// 设置产品 SN
     /// </summary>
-    void SetSN(string sn);
+    void SetSn(string sn);
+
+    /// <summary>
+    /// 获取产品 SN
+    /// </summary>
+    string? GetSn();
 
     /// <summary>
     /// 获取流程变量

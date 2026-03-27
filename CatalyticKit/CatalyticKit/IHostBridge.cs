@@ -47,12 +47,12 @@ public interface IHostBridge
     /// <summary>
     /// 设置指定 Slot 的产品 SN
     /// </summary>
-    void SlotSetSN(int slotIndex, string sn);
+    void SetSlotSn(int slotIndex, string sn);
 
     /// <summary>
     /// 获取指定 Slot 的产品 SN
     /// </summary>
-    string? SlotGetSN(int slotIndex);
+    string? GetSlotSn(int slotIndex);
 
     /// <summary>
     /// 获取指定 Slot 的流程变量

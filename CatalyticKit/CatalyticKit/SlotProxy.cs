@@ -52,8 +52,8 @@ internal class SlotProxy : ISlot, ISlotEventHandler
 
     public void Start() => _bridge.SlotStart(Index);
     public void Stop() => _bridge.SlotStop(Index);
-    public void SetSN(string sn) => _bridge.SlotSetSN(Index, sn);
-    public string? GetSN() => _bridge.SlotGetSN(Index);
+    public void SetSn(string sn) => _bridge.SetSlotSn(Index, sn);
+    public string? GetSn() => _bridge.GetSlotSn(Index);
     public string? GetVariable(string name)
         => _bridge.SlotGetVariable(Index, name);
     public TestRecord? GetTestHistory()

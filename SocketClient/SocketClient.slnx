@@ -1,4 +1,3 @@
 <Solution>
-  <Project Path="../CatalyticKit/CatalyticKit/CatalyticKit.csproj" />
   <Project Path="SocketClient/SocketClient.csproj" />
 </Solution>

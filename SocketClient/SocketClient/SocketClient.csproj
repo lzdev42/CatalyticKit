@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../CatalyticKit/CatalyticKit/CatalyticKit.csproj" Private="false" ExcludeAssets="runtime" />
+        <ProjectReference Include="../../CatalyticKit/CatalyticKit/CatalyticKit.csproj" />
     </ItemGroup>
 
     <ItemGroup>
