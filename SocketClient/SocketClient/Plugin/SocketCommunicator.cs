@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.RegularExpressions;
 using CatalyticKit;
 using SocketClient.Core;
@@ -81,8 +82,6 @@ public class SocketCommunicator : ICommunicator
     {
         if (string.IsNullOrWhiteSpace(address))
             throw new ArgumentException("地址不能为空", nameof(address));
-
-        Service.Slot(0).SetSN("123123");
 
         try
         {
@@ -262,12 +261,12 @@ public class SocketCommunicator : ICommunicator
 
                 if (targetSlot >= 0)
                 {
-                    Service.AddPluginLog(Id, $"[{address}] 接收到目标槽位 {targetSlot} 的返回数据: {msg}");
+                    Service.AddPluginLog(Id, $"[{address}] 接收到目标槽位 {targetSlot} 的返回数据: {Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(msg))}");
                     _context?.PushEvent(targetSlot, address, PluginEventType.Result, msg);
                 }
                 else
                 {
-                    Service.AddPluginLog(Id, $"[{address}] 无法识别目标槽位的返回数据: {msg}");
+                    Service.AddPluginLog(Id, $"[{address}] 无法识别目标槽位的返回数据: {Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(msg))}");
                 }
             }
         }
