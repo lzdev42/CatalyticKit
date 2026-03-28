@@ -7,8 +7,8 @@ public class AsyncBaseClient : IDisposable
     {
         private readonly string _ip;
         private readonly int _port;
-        private readonly string _rxTerminator;
-        private readonly string _txTerminator;
+        public string RxTerminator { get; set; } = "\n";
+        public string TxTerminator { get; set; } = "\n";
 
         private TcpClient? _client;
         private NetworkStream? _stream;
@@ -25,9 +25,7 @@ public class AsyncBaseClient : IDisposable
         /// 实例化底层客户端
         /// </summary>
         /// <param name="endpoint">一体化地址，格式如 "127.0.0.1:12303"</param>
-        /// <param name="rxTerminator">接收终止符，默认 \n</param>
-        /// <param name="txTerminator">发送终止符，默认 \n</param>
-        public AsyncBaseClient(string endpoint, string rxTerminator = "\n", string txTerminator = "\n")
+        public AsyncBaseClient(string endpoint)
         {
             // 自动拆分 IP 和 端口
             var parts = endpoint.Split(':');
@@ -38,9 +36,6 @@ public class AsyncBaseClient : IDisposable
 
             _ip = parts[0];
             _port = port;
-
-            _rxTerminator = rxTerminator;
-            _txTerminator = txTerminator;
         }
 
         public async Task ConnectAsync()
@@ -56,7 +51,7 @@ public class AsyncBaseClient : IDisposable
             if (_stream == null) throw new InvalidOperationException("尚未连接到服务器。");
 
             // 自动拼接发送终止符
-            string payload = command + _txTerminator;
+            string payload = command + TxTerminator;
             byte[] data = Encoding.ASCII.GetBytes(payload);
 
             await _writeLock.WaitAsync();
@@ -82,13 +77,13 @@ public class AsyncBaseClient : IDisposable
                 while (true)
                 {
                     // 1. 先检查缓存里有没有完整的一帧数据
-                    int termIndex = _buffer.ToString().IndexOf(_rxTerminator);
+                    int termIndex = _buffer.ToString().IndexOf(RxTerminator);
                     if (termIndex >= 0)
                     {
                         // 切割出完整命令（不含终止符）
                         string msg = _buffer.ToString().Substring(0, termIndex);
                         // 从缓存中移除已读取的部分和终止符
-                        _buffer.Remove(0, termIndex + _rxTerminator.Length);
+                        _buffer.Remove(0, termIndex + RxTerminator.Length);
                         return msg;
                     }
 

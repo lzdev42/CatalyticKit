@@ -98,7 +98,7 @@ public class SocketCommunicator : ICommunicator
                 case CommAction.Send:
                 case CommAction.Query:
                     // Send / Query：只负责发送，返回由 BackgroundReadLoop 通过 PushEvent 回推
-                    await HandleSend(slotIndex, address, payload);
+                    await HandleSend(slotIndex, address, payload, options);
                     break;
 
                 case CommAction.Read:
@@ -131,7 +131,7 @@ public class SocketCommunicator : ICommunicator
         }
 
         // 创建并连接 client（这里有可能被并发调用）
-        var client = new AsyncBaseClient(address, options.Terminator ?? "\n", options.Terminator ?? "\n");
+        var client = new AsyncBaseClient(address);
         await client.ConnectAsync();
 
         // 修复竞态：TryAdd 失败时必须 Dispose，避免泄漏 [web:16]
@@ -202,7 +202,7 @@ public class SocketCommunicator : ICommunicator
         await Task.CompletedTask;
     }
 
-    private async Task HandleSend(int slotIndex, string address, string payload)
+    private async Task HandleSend(int slotIndex, string address, string payload, ExecuteOptions options)
     {
         if (_clients.TryGetValue(address, out var client))
         {
@@ -211,6 +211,10 @@ public class SocketCommunicator : ICommunicator
             {
                 _addressToSlot[address] = slotIndex;
             }
+
+            // 每次发命令时重新赋值收发终止符，应对特殊指令需求
+            client.TxTerminator = options.CommandTerminator ?? "\n";
+            client.RxTerminator = options.ResultTerminator ?? "\n";
 
             await client.SendAsync(payload);
             Service.AddPluginLog(Id, $"[Slot {slotIndex}] [{address}] 已发送指令: {payload}");

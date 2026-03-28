@@ -144,7 +144,7 @@ public class ExecuteOptions
     /// 如果指定，通讯器收到该字符后返回响应
     /// 如果不指定，通讯器立即返回收到的数据
     /// </summary>
-    public string? ResultTerminator { get; set; }
+    public string? ResponseTerminator { get; set; }
 
     /// <summary>
     /// 是否为共享设备类型
