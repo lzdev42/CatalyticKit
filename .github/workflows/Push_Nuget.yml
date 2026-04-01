@@ -1,0 +1,70 @@
+name: Publish SDK to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dependencies
+        run: dotnet restore CatalyticKit/CatalyticKit/CatalyticKit.csproj
+
+      - name: Build SDK
+        run: dotnet build CatalyticKit/CatalyticKit/CatalyticKit.csproj -c Release --no-restore
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Pack SDK
+        run: |
+          dotnet pack CatalyticKit/CatalyticKit/CatalyticKit.csproj \
+            -c Release \
+            -o nupkgs \
+            --no-build \
+            -p:PackageVersion=${{ steps.get_version.outputs.VERSION }}
+      
+      - name: Show package info
+        run: |
+          echo "📦 Generated packages:"
+          ls -lh nupkgs/
+          
+          PACKAGE_FILE=$(ls nupkgs/*.nupkg | head -1)
+          VERSION=$(basename "$PACKAGE_FILE" | sed 's/CatalyticKit\.\(.*\)\.nupkg/\1/')
+          echo "Version: $VERSION"
+          echo ""
+          echo "📋 Package contents:"
+          unzip -l "$PACKAGE_FILE" | grep '\.dll$'
+
+      - name: Upload NuGet Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: nupkgs/*.nupkg
+
+      - name: Push to NuGet
+        if: "!contains(github.ref_name, 'dev')"
+        run: |
+          echo "🚀 Pushing to NuGet..."
+          dotnet nuget push nupkgs/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          echo "✅ Published to NuGet!"

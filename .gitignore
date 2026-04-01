@@ -1,0 +1,42 @@
+# .NET Core
+bin/
+obj/
+publish/
+*.exe
+*.dll
+*.pdb
+*.nupkg
+
+# IDEs
+.idea/
+.vscode/
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# User-specific
+*.suo
+*.user
+*.cache
+*.temp
+
+# NuGet
+packages/
+node_modules/
+!**/Shared/node_modules/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Logs
+*.log

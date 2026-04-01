@@ -1,0 +1,173 @@
+namespace CatalyticKit;
+
+/// <summary>
+/// 插件阅知的设备连接状态
+/// </summary>
+public enum PluginDeviceConnectionState
+{
+    Connected,
+    Disconnected,
+}
+
+/// <summary>
+/// 插件事件类型枚举
+/// </summary>
+public enum PluginEventType
+{
+    /// <summary>
+    /// 任务执行结果 (对应引擎 SubmitResult)
+    /// </summary>
+    Result,
+
+    /// <summary>
+    /// 连接状态变化 (仅通知，不触发引擎判决)
+    /// </summary>
+    Status,
+}
+
+/// <summary>
+/// 插件上下文接口
+/// 在插件激活时传入，提供插件与 Catalytic 交互的能力
+/// </summary>
+public interface IPluginContext
+{
+    /// <summary>
+    /// 插件目录路径
+    /// 用于访问插件附带的资源文件
+    /// </summary>
+    string PluginDirectory { get; }
+
+    /// <summary>
+    /// 获取指定协议或 ID 的通讯器
+    /// 用于业务插件调用底层通讯插件
+    /// </summary>
+    /// <param name="protocolOrId">协议名（如 "serial"）或插件 ID</param>
+    /// <returns>通讯器实例，未找到返回 null</returns>
+    ICommunicator? GetCommunicator(string protocolOrId);
+
+    /// <summary>
+    /// 向 Host 推送事件或任务结果
+    /// 当 eventType = Result 时，Host 将此数据作为当前步骤的结果提交给引擎进行判决
+    /// </summary>
+    /// <param name="slotIndex">关联的槽位索引</param>
+    /// <param name="address">关联的设备地址</param>
+    /// <param name="eventType">事件类型</param>
+    /// <param name="data">数据内容</param>
+    void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
+
+    /// <summary>
+    /// 向 Host 通知设备连接状态变化
+    /// Host 将根据 address 更新内部连接表并推送事件到 UI
+    /// </summary>
+    /// <param name="address">设备地址 (IP:port / COM3 / VISA 地址等)</param>
+    /// <param name="state">连接状态</param>
+    void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
+}
+
+/// <summary>
+/// 插件基础接口
+/// 所有插件必须实现此接口
+/// </summary>
+public interface IPlugin
+{
+    /// <summary>
+    /// 插件唯一标识
+    /// 格式建议: "公司.插件名"，例如 "acme.scpi-driver"
+    /// </summary>
+    string Id { get; }
+
+    /// <summary>
+    /// 插件激活时调用
+    /// 在此进行初始化工作（建立连接、注册回调、启动后台线程等）
+    /// </summary>
+    /// <param name="context">插件上下文</param>
+    Task ActivateAsync(IPluginContext context);
+
+    /// <summary>
+    /// 插件停用时调用
+    /// 在此进行清理工作（关闭连接、停止后台线程等）
+    /// </summary>
+    Task DeactivateAsync();
+}
+
+/// <summary>
+/// 通讯器接口 (Communicator)
+/// 用于处理设备通信协议
+/// </summary>
+public interface ICommunicator : IPlugin
+{
+    /// <summary>
+    /// 该通讯器支持的协议名称
+    /// 例如 "scpi"、"modbus"
+    /// </summary>
+    string Protocol { get; }
+
+    /// <summary>
+    /// 执行通讯任务
+    /// 插件应在此方法内部完成通讯动作，并通过 IPluginContext.PushEvent(PluginEventType.Result) 上报结果
+    /// 禁止通过 return 返回结果（返回值已无意义）
+    /// </summary>
+    /// <param name="slotIndex">槽位索引</param>
+    /// <param name="address">设备地址</param>
+    /// <param name="action">操作类型</param>
+    /// <param name="payload">命令数据</param>
+    /// <param name="options">执行选项</param>
+    /// <param name="ct">取消令牌</param>
+    Task ExecuteTask(
+        int slotIndex,
+        string address,
+        CommAction action,
+        string payload,
+        ExecuteOptions options,
+        CancellationToken ct);
+}
+
+/// <summary>
+/// 通讯执行选项
+/// </summary>
+public class ExecuteOptions
+{
+    /// <summary>
+    /// 超时时间（毫秒）
+    /// </summary>
+    public int TimeoutMs { get; set; }
+
+    /// <summary>
+    /// 发送的命令的终止符（如 "\n"）
+    /// 如果指定，通讯器收到该字符后返回响应
+    /// 如果不指定，通讯器立即返回收到的数据
+    /// </summary>
+    public string? CommandTerminator { get; set; }
+
+    /// <summary>
+    /// 响应数据的结束符（如 "\n"）
+    /// 如果指定，通讯器收到该字符后返回响应
+    /// 如果不指定，通讯器立即返回收到的数据
+    /// </summary>
+    public string? ResponseTerminator { get; set; }
+
+    /// <summary>
+    /// 是否为共享设备类型
+    /// </summary>
+    public bool IsShared { get; set; }
+}
+
+/// <summary>
+/// 处理器接口 (Processor)
+/// 开发者自定义的功能扩展接口，其具体执行逻辑完全由实现者决定。
+/// </summary>
+public interface IProcessor : IPlugin
+{
+    /// <summary>
+    /// 该处理器支持的任务名称。
+    /// 此名称用于在低代码脚本或配置中引用此插件执行特定操作。
+    /// </summary>
+    string TaskName { get; }
+
+    /// <summary>
+    /// 执行处理逻辑
+    /// </summary>
+    /// <param name="slotIndex">调用此插件的槽位索引</param>
+    /// <param name="ct">取消令牌</param>
+    Task ExecuteAsync(int slotIndex, CancellationToken ct);
+}
