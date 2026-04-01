@@ -11,7 +11,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../CatalyticKit/CatalyticKit/CatalyticKit.csproj" />
+      <PackageReference Include="CatalyticKit" Version="*" />
     </ItemGroup>
 
     <ItemGroup>
