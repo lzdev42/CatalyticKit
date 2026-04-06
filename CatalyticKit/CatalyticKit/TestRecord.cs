@@ -8,7 +8,7 @@ public record TestRecord
 {
     /// <summary>
     /// 产品序列号（SN）。
-    /// 若本次测试前未通过 <see cref="ISlot.SetSN"/> 设置 SN，则为 null。
+    /// 若本次测试前未通过 <see cref="ISlot.SetSn(string)"/> 设置 SN，则为 null。
     /// </summary>
     public string? Sn { get; init; }
 

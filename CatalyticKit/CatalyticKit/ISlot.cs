@@ -44,6 +44,11 @@ public interface ISlot
     void Start();
 
     /// <summary>
+    /// 设置 SN 并立即开始测试 (非阻塞)
+    /// </summary>
+    void Start(string sn);
+
+    /// <summary>
     /// 停止测试 (非阻塞)
     /// </summary>
     void Stop();
@@ -51,7 +56,8 @@ public interface ISlot
     /// <summary>
     /// 设置产品 SN
     /// </summary>
-    void SetSn(string sn);
+    /// <returns>返回当前 Slot 实例以便于链式调用</returns>
+    ISlot SetSn(string sn);
 
     /// <summary>
     /// 获取产品 SN

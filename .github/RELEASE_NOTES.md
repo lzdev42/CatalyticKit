@@ -23,8 +23,11 @@ plugins/
 ├── CsvReporter/
 │   ├── CsvReporter.dll
 │   └── manifest.json
-└── SocketClient/
-    ├── SocketClient.dll
+├── SocketClient/
+│   ├── SocketClient.dll
+│   └── manifest.json
+└── RemoteController/
+    ├── RemoteController.dll
     └── manifest.json
 ```
 
@@ -33,3 +36,4 @@ plugins/
 | `CatalyticSerialPort` | 串口通信插件 |
 | `CsvReporter` | CSV 数据导出插件 |
 | `SocketClient` | Socket 客户端插件 |
+| `RemoteController` | 远程控制插件，拦截器 |

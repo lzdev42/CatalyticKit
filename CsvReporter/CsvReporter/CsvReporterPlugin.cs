@@ -161,22 +161,22 @@ public class CsvReporterPlugin : IProcessor
                     lower = $"{thr.Operator}{thr.Value:G}";
             }
 
-            string measured = "";
-            if (resultMap.TryGetValue(def.StepId, out var rec))
-            {
-                measured = EscapeCsv(rec.ResultValue ?? "");
-                if (!rec.Passed) isOverallPass = false;
+	string measured = "NONE";
+	if (resultMap.TryGetValue(def.StepId, out var rec))
+	{
+		measured = EscapeCsv(rec.ResultValue ?? "");
+		if (!rec.Passed) isOverallPass = false;
 
-                if (string.IsNullOrEmpty(lower) && string.IsNullOrEmpty(upper) && rec.Check is CheckDetail.RangeCheck rc)
-                {
-                    lower = rc.Min.ToString("G");
-                    upper = rc.Max.ToString("G");
-                }
-            }
-            else
-            {
-                isOverallPass = false;
-            }
+		if (string.IsNullOrEmpty(lower) && string.IsNullOrEmpty(upper) && rec.Check is CheckDetail.RangeCheck rc)
+		{
+			lower = rc.Min.ToString("G");
+			upper = rc.Max.ToString("G");
+		}
+	}
+	else
+	{
+		isOverallPass = false;
+	}
 
             headerRow.Add(EscapeCsv(def.StepName));
             upperRow.Add(EscapeCsv(upper));

@@ -1,0 +1,10 @@
+{
+    "id": "catalytic.remote-controller",
+    "name": "Remote Controller",
+    "version": "1.0.0",
+    "entry": "RemoteController.dll",
+    "capabilities": {
+        "protocols": [],
+        "tasks": []
+    }
+}

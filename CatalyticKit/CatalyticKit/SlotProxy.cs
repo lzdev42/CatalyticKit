@@ -51,8 +51,21 @@ internal class SlotProxy : ISlot, ISlotEventHandler
     // --- 命令转发 ---
 
     public void Start() => _bridge.SlotStart(Index);
+
+    public void Start(string sn)
+    {
+        SetSn(sn);
+        Start();
+    }
+
     public void Stop() => _bridge.SlotStop(Index);
-    public void SetSn(string sn) => _bridge.SetSlotSn(Index, sn);
+
+    public ISlot SetSn(string sn)
+    {
+        ArgumentNullException.ThrowIfNull(sn);
+        _bridge.SetSlotSn(Index, sn);
+        return this;
+    }
     public string? GetSn() => _bridge.GetSlotSn(Index);
     public string? GetVariable(string name)
         => _bridge.SlotGetVariable(Index, name);
@@ -83,12 +96,15 @@ internal class SlotProxy : ISlot, ISlotEventHandler
     {
         Action<bool, string?>? handler;
         lock (_eventLock) handler = _testFinished;
-        if (handler == null) return;
-        foreach (var d in handler.GetInvocationList())
+        if (handler != null)
         {
-            try { ((Action<bool, string?>)d)(passed, errorMessage); }
-            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
+            foreach (var d in handler.GetInvocationList())
+            {
+                try { ((Action<bool, string?>)d)(passed, errorMessage); }
+                catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
+            }
         }
+        Service.NotifySlotFinished(Index, passed, errorMessage);
     }
 
     public void OnStepFinished(int stepIndex, bool passed)

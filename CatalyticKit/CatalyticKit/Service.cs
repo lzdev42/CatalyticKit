@@ -13,6 +13,13 @@ public static class Service
     private static volatile IHostBridge? _bridge;
     private static readonly ConcurrentDictionary<int, SlotProxy> _slots = new();
 
+    // === 全局完成状态追踪 ===
+    private static readonly HashSet<int> _finishedSlots = [];
+    private static readonly object _finishLock = new();
+    private static Action<TestFinishedEventArgs>? _slotFinished;
+    private static Action? _allTestsFinished;
+    private static int _totalSlotCount;
+
     /// <summary>
     /// [Host Internal] 设置 Host Bridge 实现。
     /// 必须在 Host 启动时、加载任何插件之前调用。
@@ -21,6 +28,7 @@ public static class Service
     public static void SetBridge(IHostBridge bridge)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
+        _totalSlotCount = bridge.GetSlotCount();
     }
 
     private static IReadOnlyList<ISlot>? _allSlotsCache;
@@ -85,6 +93,10 @@ public static class Service
     {
         if (_bridge is not { } bridge)
             throw new ServiceNotInitializedException();
+        lock (_finishLock)
+        {
+            _finishedSlots.Clear();
+        }
         bridge.StartAll();
     }
 
@@ -97,6 +109,26 @@ public static class Service
         if (_bridge is not { } bridge)
             throw new ServiceNotInitializedException();
         bridge.StopAll();
+    }
+
+    // --- Global Events ---
+
+    /// <summary>
+    /// 当单个 Slot 的测试完成时触发。
+    /// </summary>
+    public static event Action<TestFinishedEventArgs>? SlotFinished
+    {
+        add { lock (_finishLock) _slotFinished += value; }
+        remove { lock (_finishLock) _slotFinished -= value; }
+    }
+
+    /// <summary>
+    /// 当所有 Slot 的测试都完成时触发（无论 Pass 还是 Fail）。
+    /// </summary>
+    public static event Action? AllTestsFinished
+    {
+        add { lock (_finishLock) _allTestsFinished += value; }
+        remove { lock (_finishLock) _allTestsFinished -= value; }
     }
 
     // --- Slot Access ---
@@ -147,6 +179,51 @@ public static class Service
     {
         _slots.Clear();
         _bridge = null;
+    }
+
+    /// <summary>
+    /// [Internal] 由 SlotProxy 调用，通知某个 Slot 的测试已完成。
+    /// </summary>
+    internal static void NotifySlotFinished(int slotIndex, bool passed, string? errorMessage)
+    {
+        Action<TestFinishedEventArgs>? slotHandler;
+        Action? allHandler = null;
+        bool isAllFinished;
+
+        lock (_finishLock)
+        {
+            _finishedSlots.Add(slotIndex);
+            isAllFinished = _finishedSlots.Count == _totalSlotCount && _totalSlotCount > 0;
+            slotHandler = _slotFinished;
+            if (isAllFinished)
+            {
+                allHandler = _allTestsFinished;
+            }
+        }
+
+        if (slotHandler != null)
+        {
+            var args = new TestFinishedEventArgs
+            {
+                SlotIndex = slotIndex,
+                Passed = passed,
+                ErrorMessage = errorMessage
+            };
+            foreach (var d in slotHandler.GetInvocationList())
+            {
+                try { ((Action<TestFinishedEventArgs>)d)(args); }
+                catch (Exception ex) { _bridge?.ReportPluginError("service-event", ex); }
+            }
+        }
+
+        if (allHandler != null)
+        {
+            foreach (var d in allHandler.GetInvocationList())
+            {
+                try { ((Action)d)(); }
+                catch (Exception ex) { _bridge?.ReportPluginError("service-event", ex); }
+            }
+        }
     }
 }
 
