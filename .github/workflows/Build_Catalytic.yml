@@ -154,6 +154,14 @@ jobs:
           mkdir -p "${{ github.workspace }}/dist"
           ./build_release.sh --output "${{ github.workspace }}/dist" --skip-sign
 
+      - name: Upload jpackage error log on failure
+        if: failure() && matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jpackage-error-log-windows-${{ matrix.arch }}
+          path: catalyticui/composeApp/build/compose/logs/createReleaseDistributable/*.txt
+          retention-days: 5
+
       - name: Package Windows ZIP
         if: matrix.platform == 'windows'
         shell: pwsh
