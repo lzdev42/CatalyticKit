@@ -234,13 +234,13 @@ jobs:
           cd "$OUTPUT"
           zip -r "${{ github.workspace }}/SocketClient-${{ steps.vars.outputs.version }}.zip" .
 
-      - name: Build & Package Interceptor
+      - name: Build & Package RemoteController
         run: |
-          dotnet build Interceptor/Interceptor/Interceptor.csproj -c Release
-          OUTPUT=Interceptor/Interceptor/bin/Release/net10.0
+          dotnet build RemoteController/RemoteController/RemoteController.csproj -c Release
+          OUTPUT=RemoteController/RemoteController/bin/Release/net10.0
           find "$OUTPUT" -name "*.pdb" -o -name "*.xml" -o -name "*.deps.json" -o -name "*.runtimeconfig.json" -o -name "*.runtimeconfig.dev.json" | xargs rm -f
           cd "$OUTPUT"
-          zip -r "${{ github.workspace }}/Interceptor-${{ steps.vars.outputs.version }}.zip" .
+          zip -r "${{ github.workspace }}/RemoteController-${{ steps.vars.outputs.version }}.zip" .
 
       - name: Upload Plugin Artifacts
         uses: actions/upload-artifact@v7
