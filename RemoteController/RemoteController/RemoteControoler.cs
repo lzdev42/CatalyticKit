@@ -1,24 +1,32 @@
-﻿namespace RemoteController;
+namespace RemoteController;
 using CatalyticKit;
 
 public class RemoteControllerPlugin: IInterceptor
 {
     public string Name => "RemoteController";
 
-    public string Id    => "catalytic.remote-controller";
+    public string Id => "catalytic.remote-controller";
     public string TaskName => "RemoteControl";
 
     public Task DeactivateAsync()
     {
+        Service.SlotFinished -= OnSlotFinished;
         Service.AddPluginLog(pluginId:Id, "[RemoteControl] 插件已停用。");
         return Task.CompletedTask;
     }
 
     public Task ActivateAsync(IPluginContext context)
     {
-        Service.AddPluginLog(pluginId:Id, "[RemoteControl] 插件已停用。");
+        Service.SlotFinished += OnSlotFinished;
+        Service.AddPluginLog(pluginId:Id, "[RemoteControl] 插件已激活。");
         return Task.CompletedTask;
     }
+
+    private void OnSlotFinished(TestFinishedEventArgs e)
+    {
+        Service.AddPluginLog(pluginId:Id, $"[RemoteControl] Slot {e.SlotIndex} 测试完成: {(e.Passed ? "PASS" : "FAIL")}");
+    }
+
 
     public Task AfterStepAsync(int slotIndex, int stepId, string stepName, bool passed)
     {
@@ -30,16 +38,5 @@ public class RemoteControllerPlugin: IInterceptor
     {
         Service.AddPluginLog(pluginId:Id, $"[RemoteControl] before slot = {slotIndex},step = {stepId}, stepname = {stepName}。");
         return Task.FromResult(true);
-    }
-
-    private bool AllFinished()
-    {
-        var isFinished = true;
-        foreach (var slot in Service.GetAllSlots())
-        {
-
-        }
-
-        return isFinished;
     }
 }

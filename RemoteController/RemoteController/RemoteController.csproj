@@ -12,6 +12,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="CatalyticKit" Version="*" />
+      <PackageReference Include="CatalyticKit" Version="0.6.1" />
     </ItemGroup>
 </Project>
