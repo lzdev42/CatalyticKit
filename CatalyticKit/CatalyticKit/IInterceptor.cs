@@ -16,7 +16,7 @@ public interface IInterceptor : IPlugin
     /// 步骤即将开始时调用。
     /// 返回 true = 允许步骤执行；返回 false = 拒绝，步骤被标记为 Fail。
     /// </summary>
-    /// <param name="slotIndex">触发的槽位索引</param>s
+    /// <param name="slotIndex">触发的槽位索引</param>
     /// <param name="stepId">步骤 ID</param>
     /// <param name="stepName">步骤名称</param>
     /// <param name="ct">取消令牌，超时时触发（超时也视为拒绝）</param>
