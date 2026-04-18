@@ -208,14 +208,35 @@
           联系
         </button>
       </div>
-      <div id="spec-back" class="hidden">
-        <button onclick="switchView('home')"
-          class="flex items-center gap-2 text-dim hover:text-head transition-colors text-sm">
+      <div class="flex items-center gap-3 md:hidden">
+        <!-- spec 页返回按钮（仅 spec 页显示） -->
+        <button id="spec-back" class="hidden items-center gap-2 text-dim hover:text-head transition-colors text-sm"
+          onclick="switchView('home')">
           <i data-lucide="arrow-left" class="w-4 h-4"></i>返回
+        </button>
+        <!-- 汉堡按钮（仅主页显示） -->
+        <button id="menu-btn" onclick="toggleMenu()"
+          class="flex items-center justify-center w-8 h-8 text-dim hover:text-head transition-colors">
+          <i data-lucide="menu" class="w-5 h-5" id="menu-icon-open"></i>
+          <i data-lucide="x" class="w-5 h-5 hidden" id="menu-icon-close"></i>
         </button>
       </div>
     </div>
   </nav>
+
+  <div id="mobile-menu" class="hidden fixed top-14 left-0 right-0 z-40 border-b border-border"
+    style="background: rgba(10,12,16,0.97); backdrop-filter: blur(16px);">
+    <div class="flex flex-col px-6 py-4 gap-4">
+      <button onclick="switchView('home'); toggleMenu()" class="text-left text-body hover:text-head text-sm py-1">产品</button>
+      <button onclick="switchView('spec'); toggleMenu()" class="text-left text-body hover:text-head text-sm py-1">架构介绍</button>
+      <a href="https://github.com/lzdev42/CatalyticKit/releases" target="_blank"
+        class="text-body hover:text-head text-sm py-1">下载</a>
+      <button onclick="openContact(); toggleMenu()"
+        class="text-left text-sm font-medium px-5 py-2 rounded bg-accent-dim text-accent hover:bg-accent hover:text-white transition-all tag w-fit">
+        联系
+      </button>
+    </div>
+  </div>
 
   <div id="home-view" class="view pt-14">
     <section class="relative pt-28 pb-24 overflow-hidden">
@@ -479,32 +500,45 @@
 
   <script>
     lucide.createIcons();
+    function toggleMenu() {
+      const menu = document.getElementById('mobile-menu');
+      const iconOpen = document.getElementById('menu-icon-open');
+      const iconClose = document.getElementById('menu-icon-close');
+      const isHidden = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !isHidden);
+      iconOpen.classList.toggle('hidden', isHidden);
+      iconClose.classList.toggle('hidden', !isHidden);
+    }
+
     function switchView(view) {
       const home = document.getElementById('home-view');
       const spec = document.getElementById('spec-view');
       const navHome = document.getElementById('nav-home');
       const navSpec = document.getElementById('nav-spec');
-      const mainNav = document.getElementById('main-nav');
       const specBack = document.getElementById('spec-back');
+      const menuBtn = document.getElementById('menu-btn');
+
       if (view === 'spec') {
         home.classList.add('hidden');
         spec.classList.remove('hidden');
         navSpec.classList.add('active');
         navHome.classList.remove('active');
-        if (window.innerWidth < 768) {
-          mainNav.classList.add('hidden');
-          specBack.classList.remove('hidden');
-        }
-        window.scrollTo(0, 0);
+        // 移动端：隐藏汉堡，显示返回
+        specBack.classList.remove('hidden');
+        specBack.classList.add('flex');
+        menuBtn.classList.add('hidden');
       } else {
         home.classList.remove('hidden');
         spec.classList.add('hidden');
         navHome.classList.add('active');
         navSpec.classList.remove('active');
-        mainNav.classList.remove('hidden');
+        // 移动端：恢复汉堡，隐藏返回
         specBack.classList.add('hidden');
-        window.scrollTo(0, 0);
+        specBack.classList.remove('flex');
+        menuBtn.classList.remove('hidden');
       }
+      // 桌面端导航始终由 Tailwind md:flex 控制，不用 JS 动它
+      window.scrollTo(0, 0);
     }
     function openContact() {
       const m = document.getElementById('contact-modal');
