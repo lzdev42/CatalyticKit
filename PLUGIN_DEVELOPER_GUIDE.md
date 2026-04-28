@@ -1,22 +1,23 @@
-# Catalytic 插件开发指南 (v0.5.3)
+# Catalytic 插件开发指南
 
-*(更新日期: 2026-03-23 | SDK 版本: 0.5.3)*
+*(更新日期: 2026-04-22)*
 
 ---
 
 ## 目录
 
-1. [简介](#1-简介)
-2. [开发环境准备](#2-开发环境准备)
-3. [快速开始：你的第一个插件](#3-快速开始你的第一个插件)
-4. [核心概念](#4-核心概念)
-5. [SDK API 完整参考](#5-sdk-api-完整参考)
-6. [完整示例：通讯器插件](#6-完整示例通讯器插件)
-7. [错误处理最佳实践](#7-错误处理最佳实践)
-8. [高级功能](#8-高级功能)
-9. [调试与排查问题](#9-调试与排查问题)
-10. [部署插件](#10-部署插件)
-11. [常见问题 FAQ](#11-常见问题-faq)
+- [1. 简介](#1-简介)
+- [2. 开发环境准备](#2-开发环境准备)
+- [3. 快速开始：第一个插件](#3-快速开始第一个插件)
+- [4. 核心概念](#4-核心概念)
+- [5. SDK API 完整参考](#5-sdk-api-完整参考)
+- [6. 完整示例：通讯器插件](#6-完整示例通讯器插件)
+- [7. 错误处理最佳实践](#7-错误处理最佳实践)
+- [8. 高级功能](#8-高级功能)
+- [9. 调试与排查问题](#9-调试与排查问题)
+- [10. 部署插件](#10-部署插件)
+- [11. 常见问题 FAQ](#11-常见问题-faq)
+- [12. 通讯插件核心设计参考](#12-通讯插件核心设计参考)
 
 ---
 
@@ -38,16 +39,18 @@ Catalytic 采用模块化插件架构。**所有与硬件交互或自定义业�
 - ✅ **隔离性**: 插件崩溃不会影响主程序
 - ✅ **复用性**: 一个通讯器可以被多个处理器复用
 - ✅ **跨平台**: 基于 .NET 10，支持 Windows / macOS / Linux
+- ✅ **自包含**: 支持插件私有依赖加载，无需全局注册 DLL
 
 ---
 
 ## 2. 开发环境准备
 
-### 必需软件
+### 2.1 必需软件
 
-| 软件 | 版本 | 下载地址 |
+| 软件 | 版本 | 说明 |
 |------|------|----------|
-| .NET SDK | **10.0+** | https://dotnet.microsoft.com/download |
+| .NET SDK | **10.0+** | 必须使用与 Host 一致或兼容的版本 |
+| 目标框架 | **net10.0** | 插件项目必须针对 `net10.0` 进行编译 |
 | 代码编辑器 | 任意 | VS Code / Visual Studio / Rider |
 
 ### 验证安装
@@ -59,9 +62,25 @@ dotnet --version
 # 输出: 10.0.xxx
 ```
 
+### 2.2 引用 CatalyticKit
+
+建议直接通过 NuGet 安装 SDK，并使用 `*` 始终引用最新版本：
+
+```bash
+dotnet add package CatalyticKit --version *
+```
+
+或在 `.csproj` 中添加：
+
+```xml
+<ItemGroup>
+    <PackageReference Include="CatalyticKit" Version="*" />
+</ItemGroup>
+```
+
 ---
 
-## 3. 快速开始：你的第一个插件
+## 3. 快速开始：第一个插件
 
 ### 第一步：创建项目
 
@@ -75,30 +94,18 @@ cd MyFirstPlugin
 
 ### 第二步：添加 SDK 引用
 
-#### 方式 A: 直接引用 DLL（推荐）
-
-将 Catalytic 提供的 `CatalyticKit.dll` 复制到项目根目录下的 `lib/` 文件夹（没有就新建一个），然后编辑 `.csproj`：
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <Reference Include="CatalyticKit">
-      <HintPath>lib/CatalyticKit.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-</Project>
-```
-
-#### 方式 B: 使用 NuGet（如果已发布）
+建议通过 NuGet 安装 SDK，以确保依赖管理的一致性：
 
 ```bash
-dotnet add package CatalyticKit
+dotnet add package CatalyticKit --version *
+```
+
+或者手动在 `.csproj` 中添加：
+
+```xml
+<ItemGroup>
+    <PackageReference Include="CatalyticKit" Version="*" />
+</ItemGroup>
 ```
 
 ### 第三步：创建清单文件
@@ -140,34 +147,32 @@ public class DemoPlugin : ICommunicator
     public string Protocol => "demo";
 
     // 插件激活时调用
-    public Task ActivateAsync(IPluginContext context)
+    public async Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(-1, LogLevel.Info, "🎉 插件已激活！");
-        return Task.CompletedTask;
+        Service.AddPluginLog(Id, "插件已激活");
     }
 
     // 插件停用时调用
     public Task DeactivateAsync()
     {
-        _context?.Log(-1, LogLevel.Info, "👋 插件正在停用...");
         return Task.CompletedTask;
     }
 
     // 执行通讯动作
-    public Task<byte[]> ExecuteAsync(
+    public Task ExecuteTask(
         int slotIndex,
         string address,
-        string action,
-        byte[] payload,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct)
     {
-        _context?.Log(slotIndex, LogLevel.Debug, $"收到请求: address={address}, action={action}");
+        // 实现通讯逻辑
+        // 示例：直接推送成功结果
+        _context?.PushEvent(slotIndex, address, PluginEventType.Result, "Hello from plugin!");
         
-        // 这里实现你的通讯逻辑
-        // 示例：返回 "Hello" 的字节数组
-        return Task.FromResult("Hello from plugin!"u8.ToArray());
+        return Task.CompletedTask;
     }
 }
 ```
@@ -244,22 +249,23 @@ plugins/
 │  3. CreateInstance() ──> 反射创建插件实例                     │
 │       │                                                      │
 │       ▼                                                      │
-│  4. ActivateAsync() ──> 【你在这里初始化资源】                │
+│  4. ActivateAsync() ──> 【资源初始化】                          │
 │       │                                                      │
 │       ▼                                                      │
-│  5. ExecuteAsync()  ──> 【处理请求】 (循环调用)               │
+│  5. ExecuteTask()   ──> 【处理请求】 (循环调用)               │
 │       │                                                      │
 │       ▼                                                      │
-│  6. DeactivateAsync() ──> 【你在这里释放资源】                │
+│  6. DeactivateAsync() ──> 【资源释放】                          │
 │       │                                                      │
 │       ▼                                                      │
 │  [Host 关闭]                                                 │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
 
 ### 4.4 Service API (控制与事件)
 
-Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测试流程并**监听**状态变化。这对于集成外部硬件（如 PLC、机械手）非常有用。
+Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测试流程并**监听**状态变化。这对于集成外部硬件（如 PLC、控制卡）非常有用。
 
 #### 全局命令
 
@@ -269,8 +275,8 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 | `Service.GetAllSlots()` | 获取系统中所有 Slot 对象数组，方便遍历 |
 | `Service.StartAll()` | 启动所有 Slot 的测试（非阻塞）|
 | `Service.StopAll()` | 停止所有 Slot 的测试（非阻塞）|
-| `Service.GetFlowDefinition()` | **[NEW v0.4.1]** 获取全量步骤的静态定义（含上下限） |
-| `Service.ReportFolder()` | **[NEW v0.4.1]** 获取工作目录下的 `reports` 文件夹绝对路径 |
+| `Service.GetFlowDefinition()` | 获取全量步骤的静态定义（含上下限） |
+| `Service.ReportFolder()` | 获取工作目录下的 `reports` 文件夹绝对路径 |
 
 #### 单 Slot 命令
 
@@ -292,39 +298,50 @@ Catalytic 提供了一个静态 `Service` 类，允许插件**主动控制**测�
 
 #### 线程安全
 
-> ✅ **Service API 是完全线程安全的。** 你可以从任意线程调用 `Service` 的任何方法或订阅事件，SDK 内部已做防护。即使你在事件回调中调用 `Service.Slot(x).Start()` 也不会死锁。
+> ✅ **Service API 是完全线程安全的。** 可从任意线程调用 `Service` 的任何方法或订阅事件，SDK 内部已做防护。即使在事件回调中调用 `Service.Slot(x).Start()` 也不会死锁。
 
-#### [NEW] 插件实例的线程安全
+#### 插件实例的线程安全
 > [!IMPORTANT]
 > **核心机制**: Catalytic Host 采用单例模式加载插件。这意味着一个测试项目中，**同一个插件 ID 的实例在内存中只有一份**。
+> **并发调用**: 多个 Slot 可能会同时进入同一个插件实例的 `ExecuteTask`（通讯器）或 `ExecuteAsync`（处理器）。因此，插件开发者**必须**处理好并发竞争问题：
 >
-> 当多个 Slot 并发执行测试流程时，它们会**同时进入**同一个插件实例的 `ExecuteAsync` 或 `IProcessor.ExecuteAsync` 方法。因此，插件开发者**必须**处理好并发竞争问题：
 > 1. **物理资源互斥**: 如串口、网口等独占资源，必须使用 `SemaphoreSlim` 或 `lock` 确保同一时间只有一个 Slot 在操作。推荐使用 `SemaphoreSlim` 因为它支持异步等待 `WaitAsync`。
 > 2. **数据隔离**: 避免使用类级别的全局变量存储特定槽位的状态，除非该变量是用来做跨槽位共享的。
 > 3. **缓冲区清理**: 由于设备响应可能超时，下次通讯前应主动清理物理缓冲区，防止读到上一个 Slot 遗留的残余数据。
 
-> ✅ **事件回调异常保护。** 如果你的事件处理代码抛出异常，SDK 会自动捕获并上报给 Host，不会导致 Host 崩溃。
+> ✅ **事件回调异常保护。** 若事件处理代码抛出异常，SDK 会自动捕获并上报给 Host，不会导致 Host 崩溃。
 
 #### 代码示例：PLC 集成
 
 ```csharp
 public class PlcPlugin : ICommunicator
 {
+    public string Id => "acme.plc";
+    public string Protocol => "plc";
+
     public async Task ActivateAsync(IPluginContext context)
     {
-        // 1. 监听测试结束事件
-        Service.Slot(0).TestFinished += (passed, msg) => 
+        // 1. 监听单个 Slot 测试结束事件 ( ISlot.TestFinished )
+        Service.Slot(0).TestFinished += (passed, message) => 
         {
             if (passed) 
                 PlcDriver.MoveToPass();
             else 
                 PlcDriver.MoveToFail();
+            
+            Service.AddPluginLog(Id, $"Slot 0 测试已结束，结果: {passed}, 消息: {message}");
+        };
+
+        // 或监听全局测试完成事件 ( Service.SlotFinished )
+        Service.SlotFinished += (args) => 
+        {
+            Service.AddPluginLog(Id, $"检测到 Slot {args.SlotIndex} 完成，通过={args.Passed}");
         };
 
         // 2. 监听 PLC 信号 -> 触发所有 Slot 测试
         PlcDriver.OnMaterialArrived += (sn) => 
         {
-            Service.Slot(0).SetSN(sn);
+            Service.Slot(0).SetSn(sn);
             Service.StartAll();  // 启动所有 Slot
         };
 
@@ -334,6 +351,11 @@ public class PlcPlugin : ICommunicator
             Service.StopAll();  // 停止所有 Slot
         };
     }
+
+    public Task DeactivateAsync() => Task.CompletedTask;
+
+    public Task ExecuteTask(int slotIndex, string address, CommAction action, string payload, ExecuteOptions options, CancellationToken ct)
+        => Task.CompletedTask;
 }
 ```
 
@@ -350,46 +372,21 @@ public class PlcPlugin : ICommunicator
 ```csharp
 public interface IPlugin
 {
-    /// <summary>
-    /// 插件唯一标识
-    /// 格式建议: "公司.插件名"，例如 "acme.scpi-driver"
-    /// 必须与 manifest.json 中的 id 字段一致
-    /// </summary>
     string Id { get; }
-    
-    /// <summary>
-    /// 插件激活时调用
-    /// 在此进行初始化工作：打开连接、加载配置等
-    /// </summary>
-    /// <param name="context">插件上下文，提供日志、获取其他插件等能力</param>
     Task ActivateAsync(IPluginContext context);
-    
-    /// <summary>
-    /// 插件停用时调用
-    /// 在此进行清理工作：关闭连接、释放资源等
-    /// </summary>
     Task DeactivateAsync();
 }
 ```
 
-### 5.2 ICommunicator（通讯器）
+### 5.2 ICommunicator (通讯器)
 
-实现此接口以处理硬件通讯。
+用于实现与底层硬件（PLC、仪表、扫码枪等）的直接通讯。
 
 ```csharp
 public interface ICommunicator : IPlugin
 {
-    /// <summary>
-    /// 该通讯器支持的协议名称
-    /// 例如 "serial"、"tcp"、"visa"、"modbus"
-    /// 此名称会出现在 UI 的协议选择器中
-    /// </summary>
     string Protocol { get; }
     
-    /// <summary>
-    /// 执行通讯任务
-    /// 禁止通过 return 返回结果，结果必须通过 context.PushEvent(PluginEventType.Result) 上报
-    /// </summary>
     Task ExecuteTask(
         int slotIndex,
         string address,
@@ -404,45 +401,21 @@ public interface ICommunicator : IPlugin
 
 | 参数 | 类型 | 语义 |
 |---|---|---|
-| `slotIndex` | `int` | 调用此任务的槽位索引（0-based）。插件必须将此值原封不动地传入 `PushEvent`，以保证结果能正确路由回对应的 Engine 任务 |
-| `address` | `string` | 目标设备地址，格式取决于协议（如 `192.168.1.1:5025`、`COM3`、`GPIB0::5::INSTR`） |
-| `action` | `CommAction` | 操作意图，见下方 5.6 CommAction 说明 |
-| `payload` | `string` | 操作的指令内容（如 SCPI 指令 `MEAS:VOLT:DC?`，对于纯读取类操作则为空字符串） |
-| `options` | `ExecuteOptions` | 超时、结束符、资源模式等运行层选项 |
-| `ct` | `CancellationToken` | 取消令牌，当测试被停止时触发，应将其传入底层 IO 操作 |
+| `slotIndex` | `int` | 调用此任务的槽位索引。插件必须将其传入 `PushEvent` 以确保结果路由正确 |
+| `address` | `string` | 目标设备地址（如 `192.168.1.1:5025`、`COM3`） |
+| `action` | `CommAction` | 操作意图 (Connect/Send/Query 等) |
+| `payload` | `string` | 指令内容 |
+| `options` | `ExecuteOptions` | 超时、结束符、资源模式等选项 |
+| `ct` | `CancellationToken` | 取消令牌 |
 
-### 5.3 ExecuteOptions（执行选项）
-
-用于传递运行层选项。
+### 5.3 ExecuteOptions (执行选项)
 
 ```csharp
 public class ExecuteOptions
 {
-    /// <summary>
-    /// 超时时间（毫秒）
-    /// </summary>
     public int TimeoutMs { get; set; }
-    
-    /// <summary>
-    /// 响应结束符（如 "\n"、"\r"）
-    /// - 不为空时：插件应持续读取直至遭遇此字符，将完整响应内容通过 PushEvent 上报
-    /// - 为空时（Raw 模式）：插件应立即返回当前缓冲区的全部可用数据
-    /// 注意：UI 传入的是转义后的字符串（如 "\\n"），SDK 在传递给插件前会自动反转义为真实控制字符
-    /// </summary>
-    public string? Terminator { get; set; }
-
-    /// <summary>
-    /// 设备资源模式，来源于 DeviceType 配置中的 IsShared 字段
-    ///
-    /// false — 独占资源模式 (Dedicated Resource Mode)
-    ///         每个槽位 (Slot) 对应一个独立的硬件实例。
-    ///         Host 保证不同槽位的调用不会路由到同一 address。
-    ///         插件无需内部并发控制。
-    ///
-    /// true  — 共享资源模式 (Shared Resource Mode)
-    ///         多个槽位的调用均路由到同一 address。
-    ///         插件必须自行处理并发访问冲突（序列化队列或互斥锁）。
-    /// </summary>
+    public string? CommandTerminator { get; set; }
+    public string? ResponseTerminator { get; set; }
     public bool IsShared { get; set; }
 }
 ```
@@ -457,62 +430,33 @@ public class ExecuteOptions
 > | **并发冲突** | 天然隔离，无冲突 | 插件必须自行序列化 |
 > | `IsShared` | `false` | `true` |
 
-### 5.4 IProcessor（处理器）
+### 5.4 IProcessor (处理器)
 
-实现此接口以处理复杂业务逻辑。
+实现此接口以处理复杂业务逻辑（如数据库操作、文件解析、业务流控制）。
 
 ```csharp
 public interface IProcessor : IPlugin
 {
-    /// <summary>
-    /// 该处理器支持的任务名称。
-    /// 此名称用于在低代码脚本或配置文件中引用。
-    /// </summary>
     string TaskName { get; }
-    
-    /// <summary>
-    /// 执行处理逻辑
-    /// </summary>
-    /// <param name="slotIndex">当前 Slot 索引 (0-based)</param>
-    /// <param name="ct">取消令牌，当测试被停止时会触发取消</param>
-    /// <returns>异步任务</returns>
     Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
 ```
 
-#### 获取运行参数 [NEW v0.5.2]
+#### 获取运行参数
 
-在“扩展模式”下，插件通常需要读取在 UI 界面配置的参数（如：数据库连接串、扫描枪指令、CSV 路径等）。
-
-Catalytic 采用 **“拉取 (Pull)”** 模式提供参数。插件在 `ExecuteAsync` 中通过 `Service` 接口获取当前步骤的上下文：
+插件在 `ExecuteAsync` 中通过 `Service` 接口拉取参数：
 
 ```csharp
 public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 {
-    // 1. 获取当前 Slot 的步骤上下文
     var step = Service.Slot(slotIndex).GetCurrentStep();
-    
-    // 2. 读取配置的参数字符串
-    string? rawParams = step?.Params; 
-    
-    if (string.IsNullOrEmpty(rawParams)) {
-        // 处理参数缺失的情况
-        return;
-    }
-
-    // 3. 根据你的逻辑解析参数 (JSON, CSV 或普通文本)
-    // 示例：如果填的是 JSON
-    // var config = JsonConvert.DeserializeObject<MyConfig>(rawParams);
+    string? rawParams = step?.Params; // UI 配置的参数字符串
 }
 ```
 
-> [!TIP]
-> **原汁原味传输**：系统底层使用 Base64 对参数进行了封装，确保无论你在 UI 填入什么特殊字符（换行、引号、逗号），插件拿到的 `Params` 字符串都与 UI 输入的完全一致，不发生转义或截断。
+### 5.5 IInterceptor (拦截器)
 
-
-### 5.5 IInterceptor (拦截器) [NEW v0.5.2]
-
-拦截器主要用于在每个步骤执行前进行“准入检查”，或在步骤执行后进行统一处理。
+拦截器用于在步骤执行前后进行全局预检或处理。
 
 > [!WARNING]
 > **全局唯一性**：整个系统中只允许加载一个拦截器插件。如果加载了多个，系统会以先发现的为准，并在日志中发出警告。
@@ -520,273 +464,131 @@ public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
 ```csharp
 public interface IInterceptor : IPlugin
 {
-    /// <summary>
-    /// 步骤执行前的拦截逻辑
-    /// </summary>
-    /// <returns>返回 true 允许执行，返回 false 则跳过该步并将结果标记为 Failed</returns>
     Task<bool> BeforeStepAsync(int slotIndex, int stepId, string stepName, CancellationToken ct);
-
-    /// <summary>
-    /// 步骤执行后的通知（纯通知，不影响结果）
-    /// </summary>
     Task AfterStepAsync(int slotIndex, int stepId, string stepName, bool passed);
 }
 ```
 
-#### 关键特性：
+#### 关键特性
 1. **同步阻塞**：`BeforeStepAsync` 会阻塞 Engine 的执行，直到收到插件的决定。
 2. **超时机制**：Host 为拦截器提供了 5s 的默认超时保护。如果插件在该时间内未返回，系统将自动视为 `false` (拒绝)。
 3. **无缝执行**：如果没有加载拦截器，Engine 会以零延迟直接执行步骤，不会产生性能损耗。
 
-在 `ActivateAsync` 中传入，保存它以便后续使用。
+### 5.6 IPluginContext (插件上下文)
+
+在 `ActivateAsync` 中传入，插件应保存该引用以便后续使用。
 
 ```csharp
 public interface IPluginContext
 {
-    /// <summary>
-    /// 插件目录路径
-    /// 用于访问插件附带的资源文件（如配置文件、固件等）
-    /// </summary>
     string PluginDirectory { get; }
-
-    /// <summary>
-    /// 获取其他通讯器（用于插件互调）
-    /// 典型用途：处理器插件需要调用底层通讯插件发送指令
-    /// </summary>
-    /// <param name="protocolOrId">协议名（如 "serial"）或插件 ID</param>
-    /// <returns>通讯器实例，未找到返回 null</returns>
     ICommunicator? GetCommunicator(string protocolOrId);
-
-    /// <summary>
-    /// 向 Host 推送任务结果或状态事件
-    /// 当 eventType = Result 时，Host 将此数据作为当前步骤结果提交给引擎进行判决
-    /// </summary>
     void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
-
-    /// <summary>
-    /// 向 Host 通知设备连接状态变化
-    /// Host 将根据 address 更新内部连接表，UI 将在下次轮询时得到新状态
-    /// </summary>
     void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
 }
 ```
 
-> 💡 **小贴士**：`CancellationToken` 是 .NET 的取消机制。当用户点击“停止测试”时，这个 token 会触发取消。在你的代码里应该定期检查 `ct.ThrowIfCancellationRequested()` 或把它传给异步方法（如 `await Task.Delay(1000, ct)`）。
+> 💡 **说明**：`CancellationToken` 是 .NET 的取消机制。当用户点击“停止测试”时，此 token 会触发取消。在插件代码中应定期检查 `ct.ThrowIfCancellationRequested()` 或将其传递给异步方法。
 
-### 5.6 CommAction（标准动作枚举）
-
-推荐使用此枚举而不是手动字符串判断。
+### 5.7 CommAction (标准动作枚举)
 
 ```csharp
 public enum CommAction
 {
-    Connect,     // 建立连接
-    Disconnect,  // 断开连接
-    Send,        // 发送数据（不等响应）
-    Read,        // 读取当前可用数据
-    Query,       // 发送 + 读取（便捷方法）
-    Status       // 查询连接状态
+    Connect, Disconnect, Send, Read, Query, Status
 }
 ```
 
-### 5.7 CommunicatorExtensions（便捷扩展方法）
+### 5.8 便捷扩展方法
 
-SDK 提供这些扩展方法简化调用：
+#### IPluginContext 扩展
+| 方法 | 说明 |
+|---|---|
+| `PushResult(slot, addr, data)` | 等价于 `PushEvent` 且类型为 `Result` |
 
+#### ICommunicator 扩展
+| 方法 | 说明 |
+|---|---|
+| `SendAsync(...)` | 快速发送字符串 |
+| `ReadAsync(...)` | 快速读取 |
+| `ConnectAsync(...)` | 建立连接 |
+| `DisconnectAsync(...)` | 断开连接 |
+| `GetStatusAsync(...)` | 查询连接状态 |
+
+### 5.9 日志与工具
+
+#### LogLevel
 ```csharp
-// 发送数据
-await communicator.SendAsync(slotIndex, "COM3", data, ct);
-
-// 读取数据
-byte[] response = await communicator.ReadAsync(slotIndex, "COM3", timeoutMs: 1000, ct);
-
-// 建立连接
-await communicator.ConnectAsync(slotIndex, "COM3", timeoutMs: 5000, ct);
-
-// 断开连接
-await communicator.DisconnectAsync(slotIndex, "COM3", ct);
-
-// 查询状态
-byte[] status = await communicator.GetStatusAsync(slotIndex, "COM3", ct);
+public enum LogLevel { Debug, Info, Warning, Error }
 ```
 
-### 5.8 LogLevel（日志级别）
+#### 常用扩展 (Utility Extensions)
+SDK 提供 `StringExtension` 和 `ByteExtension`（如 `ToBool()`, `ToInt()`, `ToBytes()`, `ToHexStringWithSpaces()`），建议优先使用。
 
-```csharp
-public enum LogLevel
-{
-    Debug,    // 调试信息（开发时使用）
-    Info,     // 一般信息
-    Warning,  // 警告
-    Error     // 错误
-}
-```
+### 5.10 数据模型参考
 
-### 5.9 常用工具扩展 (Utility Extensions)
-
-SDK 提供了 `CatalyticKit.StringExtension` 和 `CatalyticKit.ByteExtension`，包含常用的类型转换和格式化工具，建议优先使用以减少重复代码。
-
-#### 字符串扩展 (StringExtension)
-
-```csharp
-// 安全转换 (转换失败返回默认值，不抛异常)
-bool b1 = "true".ToBool();           // true
-bool b2 = "1".ToBool();              // true
-int i = "123".ToInt(defaultValue: 0);
-double d = "3.14".ToDouble();
-DateTime dt = "2026-01-01".ToDateTime(defaultValue: DateTime.Now);
-
-// Hex 字符串转字节数组 (支持空/null/空格/连字符/冒号)
-byte[] data1 = "AABBCC".ToBytes();              // [0xAA, 0xBB, 0xCC]
-byte[] data2 = "AA-BB-CC".ToBytes();            // [0xAA, 0xBB, 0xCC]
-byte[] data3 = "AA BB CC".ToBytes();            // [0xAA, 0xBB, 0xCC]
-
-// 尝试转换 (安全模式)
-if ("AABB".TryToBytes(out byte[] result)) { ... }
-```
-
-#### 字节扩展 (ByteExtension)
-
-```csharp
-byte[] data = { 0xAA, 0xBB, 0xCC };
-
-// 转带空格的 Hex 字符串 (高性能)
-string hex = data.ToHexStringWithSpaces(); // "AA BB CC"
-```
-
-### 5.10 TestRecord（测试历史记录）
-
-调用 `Service.Slot(x).GetTestHistory()` 获取强类型的完整测试记录。建议只在 `TestFinished` 事件回调中调用。
-
-```csharp
-Service.Slot(0).TestFinished += (passed, _) =>
-{
-    var record = Service.Slot(0).GetTestHistory();
-    if (record == null) return;
-
-    Console.WriteLine($"SN: {record.Sn}");
-    foreach (var step in record.Steps)
-    {
-        if (!step.IsTestItem) continue; // 跳过辅助步骤
-        Console.WriteLine($"  [{step.StepName}] {(step.Passed ? "PASS" : "FAIL")} ({step.ElapsedMs}ms)");
-
-        // 按检查类型分发
-        switch (step.Check)
-        {
-            case CheckDetail.RangeCheck r:
-                Console.WriteLine($"    范围: {r.Min} ~ {r.Max}, 实测: {r.Actual}");
-                break;
-            case CheckDetail.Threshold t:
-                Console.WriteLine($"    阈值: {t.Operator} {t.ThresholdValue}, 实测: {t.Actual}");
-                break;
-            case CheckDetail.Contains c:
-                Console.WriteLine($"    包含: '{c.Substring}', 实际: '{c.Actual}'");
-                break;
-            case CheckDetail.Compare cmp:
-                Console.WriteLine($"    比较: A={cmp.ActualA} {cmp.Operator} B={cmp.ActualB}");
-                break;
-        }
-    }
-};
-```
-
-#### TestRecord 字段说明
+#### TestRecord (测试记录)
+通过 `Service.Slot(x).GetTestHistory()` 获取强类型的完整测试记录。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `Sn` | `string?` | 产品 SN（测试前通过 `SetSN` 设置）|
-| `Steps` | `IReadOnlyList<StepRecord>` | 按执行顺序排列的所有步骤结果 |
+| `Sn` | `string?` | 产品 SN |
+| `Steps` | `IReadOnlyList<StepRecord>` | 各步骤执行结果 |
 
-#### StepRecord 字段说明
-
+#### StepRecord (步骤结果)
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `StepId` | `int` | 步骤 ID |
-| `StepName` | `string` | 步骤名称（低代码脚本中配置）|
-| `Passed` | `bool` | 是否通过 |
-| `IsTestItem` | `bool` | 是否为测试项（false = 辅助步骤，可过滤）|
-| `ElapsedMs` | `uint` | 执行耗时（毫秒）|
-| `ResultSummary` | `string?` | 人类可读摘要，如 `"3.31 (>=3.0 && <=3.5) → PASS"` |
-| `ResultValue` | `string?` | 最终测量结果的纯净格式（数字或非 JSON 转义字符串，类型由解析规则决定）|
-| `Check` | `CheckDetail?` | 检查结果详情（强类型，见下表）|
-| `Variables` | `Dictionary<string, string>` | 本步骤提取的变量快照 |
+| `StepId` | `int` | 步骤唯一 ID |
+| `StepName` | `string` | 步骤显示名称 |
+| `Passed` | `bool` | 该步骤是否通过 |
+| `IsTestItem` | `bool` | 是否为有效测试项（忽略辅助步骤） |
+| `ElapsedMs` | `uint` | 执行耗时 |
+| `ResultValue` | `string?` | 最终测量的结果值（纯净字符串） |
+| `ResultSummary` | `string?` | 格式化的结果摘要（含上下限） |
+| `Variables` | `IReadOnlyDictionary<string, string>` | 本步骤生成的变量快照 |
+| `Check` | `CheckDetail?` | 强类型检查详情 |
 
-#### CheckDetail 子类型
-
-| 类型 | 字段 | 说明 |
+#### CheckDetail 子类型 (实测数据)
+| 类型 | 关键字段 | 说明 |
 |---|---|---|
 | `RangeCheck` | `Min`, `Max`, `Actual` | 范围检查 |
-| `Threshold` | `Operator`, `ThresholdValue`, `Actual` | 阈值检查（如 `>=`）|
-| `Contains` | `Substring`, `Actual` | 字符串包含 |
+| `Threshold` | `Operator`, `Value`, `Actual` | 阈值检查 |
+| `Contains` | `Substring`, `Actual` | 子串包含 |
 | `Compare` | `Operator`, `ActualA`, `ActualB` | 双变量比较 |
-| `Unknown` | `RawJson` | 未知模板（前向兼容）|
 
-### 5.11 FlowDefinition (流程定义) [NEW v0.4.1]
-
-`Service.GetFlowDefinition()` 返回当前已加载流程的静态配置。这不同于 `TestRecord`，它不包含实测值，但包含**所有**定义的步骤（即使因为之前的步骤失败而未执行的步骤）。
-
-常见用途：在测试开始前生成 CSV 报告表头，预填测试项及其上下限。
-
-```csharp
-var flow = Service.GetFlowDefinition();
-if (flow == null) return;
-
-foreach (var step in flow.Steps)
-{
-    if (!step.IsTestItem) continue;
-
-    Console.WriteLine($"测试项: {step.StepName} (Label: {step.StepLabel})");
-    
-    // 获取配置的检查规则
-    if (step.CheckRule is CheckRuleDefinition.RangeRule r)
-    {
-        Console.WriteLine($"  规则: 范围检查 [{r.Min}, {r.Max}]");
-    }
-}
-```
-
-#### FlowDefinition & StepDefinition 字段
+#### FlowDefinition (流程定义)
+通过 `Service.GetFlowDefinition()` 获取静态配置。
 
 | 类型 | 字段 | 说明 |
 |---|---|---|
 | `FlowDefinition` | `Steps` | `IReadOnlyList<StepDefinition>` |
-| `StepDefinition` | `StepId` | 步骤唯一数字 ID |
-| | `StepName` | 步骤名称 |
-| | `StepLabel` | 步骤标签 (供逻辑判断) |
-| | `IsTestItem` | 是否为测试项 |
-| | `CheckRule` | `CheckRuleDefinition?` |
+| `StepDefinition` | `StepName`, `StepKey` | 步骤标识 |
+| | `CheckRule` | 强类型静态检查规则 |
 
-#### CheckRuleDefinition 子类型
-
-| 类型 | 字段 | 说明 |
+#### CheckRuleDefinition 子类型 (静态规则)
+| 类型 | 关键字段 | 说明 |
 |---|---|---|
-| `RangeRule` | `Min`, `Max` | 静态范围配置 |
-| `ThresholdRule` | `Operator`, `ThresholdValue` | 静态阈值配置 |
-| `ContainsRule` | `Substring` | 静态包含子串配置 |
-| `CompareRule` | `Operator` | 变量比较配置 |
-| `UnknownRule` | `RawJson` | 原始配置 JSON |
+| `RangeRule` | `Min`, `Max` | 静态上下限配置 |
+| `ThresholdRule` | `Operator`, `Value` | 静态阈值配置 |
+| `ContainsRule` | `Substring` | 静态目标子串 |
+| `CompareRule` | `Operator` | 变量比较规则 |
+
 
 ---
 
 ## 6. 完整示例：通讯器插件
 
-这是一个功能完整的串口通讯插件示例。
-
-### SerialCommunicator.cs
+本示例演示一个基于 `.NET SerialPort` 的通讯器插件。
 
 ```csharp
+using System.Collections.Concurrent;
 using System.IO.Ports;
 using CatalyticKit;
 
 namespace Acme.Serial;
 
-/// <summary>
-/// 串口通讯器插件
-/// 支持标准串口设备的读写操作
-/// </summary>
 public class SerialCommunicator : ICommunicator
 {
-    // 线程安全管理：按物理地址锁定 (建议使用 ConcurrentDictionary)
     private readonly ConcurrentDictionary<string, SerialPort> _ports = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
     private readonly object _mainLock = new();
@@ -795,187 +597,112 @@ public class SerialCommunicator : ICommunicator
     public string Id => "acme.serial";
     public string Protocol => "serial";
 
-    public Task ActivateAsync(IPluginContext context)
+    public async Task ActivateAsync(IPluginContext context)
     {
         _context = context;
-        _context.Log(-1, LogLevel.Info, "串口插件已激活");
-        return Task.CompletedTask;
+        Service.AddPluginLog(Id, "串口插件已激活");
     }
 
     public Task DeactivateAsync()
     {
-        // 释放所有资源
         lock (_mainLock)
         {
             foreach (var port in _ports.Values)
             {
                 try { if (port.IsOpen) port.Close(); port.Dispose(); }
-                catch { /* ignore */ }
+                catch { }
             }
             _ports.Clear();
-            
             foreach (var s in _locks.Values) s.Dispose();
             _locks.Clear();
         }
         return Task.CompletedTask;
     }
 
-    public async Task<byte[]> ExecuteAsync(
+    public async Task ExecuteTask(
         int slotIndex,
         string address,
-        string action,
-        byte[] payload,
+        CommAction action,
+        string payload,
         ExecuteOptions options,
         CancellationToken ct)
     {
-        if (!Enum.TryParse<CommAction>(action, ignoreCase: true, out var commAction))
-            throw new ArgumentException($"未知的动作类型: {action}");
-
-        // 1. 获取该地址对应的锁（通过 ConcurrentDictionary 确保原子性）
         var semaphore = _locks.GetOrAdd(address, _ => new SemaphoreSlim(1, 1));
-
-        // 2. 使用异步等待获取权限
         await semaphore.WaitAsync(ct);
         try
         {
             var port = GetOrCreatePort(address);
             
-            // 3. 执行具体动作
-            switch (commAction)
+            switch (action)
             {
                 case CommAction.Connect:
-                    return await ConnectAsync(slotIndex, port, options.TimeoutMs, ct);
-                    
-                case CommAction.Send:
-                    // 关键：发送前清理无效数据，防止读取到上一个 Slot 的残留
-                    if (port.IsOpen) port.DiscardInBuffer();
-                    return await SendAsync(slotIndex, port, payload, ct);
-                    
+                    if (!port.IsOpen) port.Open();
+                    break;
                 case CommAction.Query:
-                    if (port.IsOpen) port.DiscardInBuffer();
-                    return await QueryAsync(slotIndex, port, payload, options.TimeoutMs, options.Terminator, ct);
-                    
+                    var resp = await QueryAsync(slotIndex, port, payload, options.TimeoutMs, options.ResponseTerminator, ct);
+                    _context?.PushResult(slotIndex, address, resp);
+                    break;
+                case CommAction.Send:
+                    await SendAsync(slotIndex, port, payload, ct);
+                    break;
                 case CommAction.Read:
-                    return await ReadAsync(slotIndex, port, options.TimeoutMs, options.Terminator, ct);
-                    
+                    var r = await ReadAsync(slotIndex, port, options.TimeoutMs, options.ResponseTerminator, ct);
+                    _context?.PushResult(slotIndex, address, r);
+                    break;
                 case CommAction.Disconnect:
-                    return await DisconnectAsync(slotIndex, port);
-                    
-                default:
-                    return [];
+                    await DisconnectAsync(slotIndex, port);
+                    break;
             }
         }
         finally
         {
-            // 4. 释放锁
             semaphore.Release();
         }
     }
 
-    private async Task<byte[]> ConnectAsync(int slotIndex, SerialPort port, int timeoutMs, CancellationToken ct)
-    {
-        if (port.IsOpen)
-        {
-            _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 已经打开");
-            return [];
-        }
-
-        try
-        {
-            port.Open();
-            _context?.Log(slotIndex, LogLevel.Info, $"[{port.PortName}] 连接成功");
-            return [];
-        }
-        catch (Exception ex)
-        {
-            throw new IOException($"打开串口 {port.PortName} 失败: {ex.Message}", ex);
-        }
-    }
-
-    private Task<byte[]> DisconnectAsync(int slotIndex, SerialPort port)
+    private Task DisconnectAsync(int slotIndex, SerialPort port)
     {
         if (port.IsOpen)
         {
             port.Close();
-            _context?.Log(slotIndex, LogLevel.Info, $"[{port.PortName}] 已断开");
+            Service.AddPluginLog(Id, $"[{port.PortName}] 已断开");
         }
-        return Task.FromResult(Array.Empty<byte>());
+        return Task.CompletedTask;
     }
 
-    private Task<byte[]> SendAsync(int slotIndex, SerialPort port, byte[] data, CancellationToken ct)
+    private Task SendAsync(int slotIndex, SerialPort port, string data, CancellationToken ct)
     {
         EnsureOpen(port);
-        port.Write(data, 0, data.Length);
-        _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 发送 {data.Length} 字节");
-        return Task.FromResult(Array.Empty<byte>());
+        port.Write(data);
+        return Task.CompletedTask;
     }
 
-    private async Task<byte[]> ReadAsync(int slotIndex, SerialPort port, int timeoutMs, string? terminator, CancellationToken ct)
+    private async Task<string> ReadAsync(int slotIndex, SerialPort port, int timeoutMs, string? terminator, CancellationToken ct)
     {
         EnsureOpen(port);
         port.ReadTimeout = timeoutMs > 0 ? timeoutMs : -1;
 
-        var buffer = new byte[4096];
-        try
+        // 如果指定了结束符，读取直到结束符
+        if (!string.IsNullOrEmpty(terminator))
         {
-            // 等待数据可用
-            var startTime = DateTime.UtcNow;
-            while (port.BytesToRead == 0)
-            {
-                ct.ThrowIfCancellationRequested();
-                if (timeoutMs > 0 && (DateTime.UtcNow - startTime).TotalMilliseconds > timeoutMs)
-                {
-                    throw new TimeoutException($"读取超时 ({timeoutMs}ms)");
-                }
-                await Task.Delay(10, ct);
-            }
-
-            // 如果指定了结束符，读取直到结束符
-            if (!string.IsNullOrEmpty(terminator))
-            {
-                port.NewLine = terminator;
-                try 
-                {
-                    string line = port.ReadLine();
-                    _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 读取行: {line.Trim()}");
-                    return System.Text.Encoding.UTF8.GetBytes(line);
-                }
-                catch (TimeoutException)
-                {
-                    throw new TimeoutException($"读取行超时 ({timeoutMs}ms)");
-                }
-            }
-
-            // 否则读取可用数据
-            var count = port.Read(buffer, 0, buffer.Length);
-            _context?.Log(slotIndex, LogLevel.Debug, $"[{port.PortName}] 读取 {count} 字节");
-            return buffer[..count];
+            port.NewLine = terminator;
+            return await Task.Run(() => port.ReadLine(), ct);
         }
-        catch (TimeoutException)
-        {
-            throw;
-        }
+
+        // 否则读取现有缓冲区数据
+        return await Task.Run(() => port.ReadExisting(), ct);
     }
 
-    private async Task<byte[]> QueryAsync(int slotIndex, SerialPort port, byte[] data, int timeoutMs, string? terminator, CancellationToken ct)
+    private async Task<string> QueryAsync(int slotIndex, SerialPort port, string data, int timeoutMs, string? terminator, CancellationToken ct)
     {
         await SendAsync(slotIndex, port, data, ct);
-        await Task.Delay(50, ct); // 给设备一点处理时间
         return await ReadAsync(slotIndex, port, timeoutMs, terminator, ct);
-    }
-
-    private byte[] GetStatus(SerialPort port)
-    {
-        var status = port.IsOpen ? "connected" : "disconnected";
-        return System.Text.Encoding.UTF8.GetBytes(status);
     }
 
     private void EnsureOpen(SerialPort port)
     {
         if (!port.IsOpen)
-        {
-            throw new InvalidOperationException($"串口 {port.PortName} 未打开，请先执行 Connect");
-        }
+            throw new InvalidOperationException($"串口 {port.PortName} 未打开");
     }
 
     private SerialPort GetOrCreatePort(string portName)
@@ -997,16 +724,23 @@ public class SerialCommunicator : ICommunicator
 
 ```json
 {
-    "id": "acme.serial",
-    "name": "Acme Serial Driver",
-    "version": "1.0.0",
-    "entry": "Acme.Serial.dll",
-    "capabilities": {
-        "protocols": ["serial"],
-        "tasks": []
-    }
+  "id": "acme.serial",
+  "name": "Acme Serial Communicator",
+  "version": "1.0.0",
+  "author": "Acme Corp",
+  "entry": "Acme.Serial.dll",
+  "capabilities": {
+    "protocols": ["serial", "rs232"],
+    "tasks": []
+  }
 }
 ```
+
+- **id**: 插件唯一标识（建议使用反向域名格式）。必须与代码中 `Id` 属性返回值完全一致。
+- **entry**: 插件入口 DLL 的文件名。
+- **capabilities**: 插件的能力声明。
+    - **protocols**: 仅通讯器插件需要，声明支持的协议标识。
+    - **tasks**: 仅处理器插件需要，声明支持的任务名称。
 
 ---
 
@@ -1071,11 +805,11 @@ catch (Exception ex)
 ### 7.4 资源清理
 
 ```csharp
-public async Task<byte[]> ExecuteAsync(
+public async Task ExecuteTask(
     int slotIndex, 
     string address, 
-    string action, 
-    byte[] payload, 
+    CommAction action, 
+    string payload, 
     ExecuteOptions options, 
     CancellationToken ct)
 {
@@ -1084,7 +818,6 @@ public async Task<byte[]> ExecuteAsync(
     {
         stream = File.OpenRead(path);
         // ... 使用 stream ...
-        return result;
     }
     finally
     {
@@ -1119,12 +852,12 @@ public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
         throw new InvalidOperationException("串口插件未加载");
     }
     
-    // 使用扩展方法调用
-    await serial.ConnectAsync("COM3", 5000, ct);
-    await serial.SendAsync("COM3", "MEAS:VOLT?\n"u8.ToArray(), ct);
-    var response = await serial.ReadAsync("COM3", 1000, ct);
+    // 使用扩展方法调用 (注意：扩展方法也返回 Task，不直接返回结果)
+    await serial.ConnectAsync(slotIndex, "COM3", 5000, ct);
+    await serial.SendAsync(slotIndex, "COM3", "MEAS:VOLT?\n", ct);
+    await serial.ReadAsync(slotIndex, "COM3", 1000, ct);
     
-    return response;
+    // 逻辑：处理器完成工作后直接退出，结果通过通讯器插件的 PushEvent 上报给引擎
 }
 ```
 
@@ -1140,7 +873,7 @@ public Task ActivateAsync(IPluginContext context)
     if (File.Exists(configPath))
     {
         var config = File.ReadAllText(configPath);
-        _context.Log(LogLevel.Info, $"已加载配置: {config}");
+        Service.AddPluginLog(Id, $"已加载配置: {config}");
     }
     
     return Task.CompletedTask;
@@ -1156,17 +889,17 @@ public Task ActivateAsync(IPluginContext context)
 当插件检测到设备连接意外断开时，**强烈建议**主动推送 `DeviceDisconnected` 事件，以便 Host 立即更新状态，而不是等待下一次心跳或操作失败。
 
 ```csharp
-using CatalyticKit; // 引用 PluginEvents
+using CatalyticKit; 
 
-public void OnConnectionLost(string address)
+public void OnConnectionLost(int slotIndex, string address)
 {
-    // Payload 必须是 UTF8 编码的设备地址
-    var payload = System.Text.Encoding.UTF8.GetBytes(address);
+    // 状态数据
+    var data = "Disconnected";
     
-    // 使用标准常量推送事件 (需包含 slotIndex 和 address)
-    _context?.PushEvent(-1, address, PluginEvents.DeviceDisconnected, payload);
+    // 使用 Status 类型推送事件
+    _context?.PushEvent(slotIndex, address, PluginEventType.Status, data);
     
-    _context?.Log(LogLevel.Warning, $"[{address}] 检测到断线，已通知 Host");
+    Service.AddPluginLog(Id, $"[{address}] 检测到断线，已通知 Host");
 }
 ```
 
@@ -1174,10 +907,10 @@ public void OnConnectionLost(string address)
 
 插件也可以定义自己的事件类型，供上层业务处理。
 ```csharp
-public void OnDataReceived(int slotIndex, byte[] data)
+public void OnDataReceived(int slotIndex, string address, string data)
 {
     // 推送自定义事件 (包含 slotIndex 和 address)
-    _context?.PushEvent(slotIndex, "device_address_here", "can_frame", data);
+    _context?.PushEvent(slotIndex, address, PluginEventType.Status, $"custom_data:{data}");
 }
 ```
 
@@ -1189,9 +922,8 @@ public void OnDataReceived(int slotIndex, byte[] data)
 > **约束**: 若要支持低代码判断，推送到 `DeviceData` 通道的数据 **必须是 UTF-8 编码的字符串或 JSON**。如果是私有二进制格式，低代码引擎将无法解析。
 
 ```csharp
-// ✅ 正确：推送到 Host 蓄水池，供 Low-code Engine 或 Business Plugin 读取
-// 使用便捷扩展方法
-_context?.PushDeviceData(slotIndex, address, System.Text.Encoding.UTF8.GetBytes("VOLT 5.003"));
+// ✅ 正确：推送到 Host 内部缓冲区，供 Low-code Engine 进行判决
+_context?.PushResult(slotIndex, address, "VOLT 5.003");
 ```
 
 ---
@@ -1201,10 +933,10 @@ _context?.PushDeviceData(slotIndex, address, System.Text.Encoding.UTF8.GetBytes(
 ### 9.1 使用日志
 
 ```csharp
-_context?.Log(LogLevel.Debug, "调试信息：变量值 = " + value);
-_context?.Log(LogLevel.Info, "操作完成");
-_context?.Log(LogLevel.Warning, "警告：超时后重试");
-_context?.Log(LogLevel.Error, "错误：连接失败");
+Service.AddPluginLog(Id, "调试信息：变量值 = " + value);
+Service.AddPluginLog(Id, "操作完成");
+Service.AddPluginLog(Id, "警告：超时后重试");
+Service.AddPluginLog(Id, "错误：连接失败");
 ```
 
 日志会显示在 Catalytic UI 的系统日志面板中。
@@ -1214,7 +946,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 1. 启动 Catalytic Host
 2. 打开 Visual Studio，选择 **Debug > Attach to Process**
 3. 找到 `Catalytic.Host` 进程
-4. 在你的插件代码中设置断点
+4. 在插件代码中设置断点
 5. 触发插件执行，断点会命中
 
 ### 9.3 常见问题检查清单
@@ -1228,37 +960,56 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 
 ---
 
-## 10. 部署插件
+## 10. 依赖项管理与部署
 
-### 目录结构
+### 10.1 依赖项管理规范
+
+插件支持引用第三方托管库（Managed DLL）和原生库（Native DLL）。为了确保插件在 Host 中正确加载，必须遵循以下规范：
+#### 1. .NET 版本要求
+*   **目标框架**: 插件项目必须设置 `<TargetFramework>net10.0</TargetFramework>`。
+*   **第三方托管库**: 引用的第三方 DLL 必须兼容 .NET 10（建议使用 `net10.0`、`net9.0` 或 `netstandard2.1`）。
+
+#### 2. 原生库加载 (P/Invoke)
+若插件需要调用 C/C++ 编写的原生库，请遵循以下原则：
+*   **禁止硬编码路径**: 在 `[DllImport]` 中**仅允许指定库名**（例如 `VendorSDK`），严禁包含任何文件夹路径。
+*   **自动寻址机制**: Host 会自动在插件所在的私有目录中搜索对应的库文件。
+*   **跨平台支持**: Host 能够自动识别并补全不同平台的后缀（`.dll`、`.so`、`.dylib`）及 `lib` 前缀。
+*   **架构匹配**: 原生库的指令集架构（如 x64）必须与 Host 进程的架构保持一致。
+
+#### 3. 项目配置
+若插件引用了 NuGet 包，请务必在 `.csproj` 中开启以下设置，以确保编译时所有依赖项都复制到插件目录下：
+```xml
+<PropertyGroup>
+  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+</PropertyGroup>
+```
+
+### 10.2 历史遗留环境兼容性方案
+
+若插件依赖的第三方组件与 .NET 10 存在底层不兼容（例如：仅支持 x86 架构的旧版驱动、过时的 .NET Framework 算法库等），建议采用以下**进程间通信 (IPC)** 方案进行解耦：
+
+1.  **独立进程封装**: 将不兼容的组件封装为一个独立的外部执行程序（Executable）。
+2.  **插件通信桥接**: 插件作为 Host 的调用入口，通过 Socket、命名管道（Named Pipe）或本地 HTTP 等方式与该独立进程进行交互。
+3.  **职责分离**: 插件负责满足 Catalytic 接口规范，独立进程负责处理特定的底层兼容性逻辑。
+
+*注：具体的 IPC 实现方式由开发者根据业务性能需求自行决定。*
+
+### 10.3 部署目录结构
+
+部署时，只需将插件目录整体拷贝至 Host 的 `plugins` 文件夹下。Host 保证每个插件的依赖环境是相互隔离的。
 
 ```
 <Catalytic 工作目录>/
 └── plugins/
-    └── <你的插件 ID>/
+    └── <插件 ID>/
         ├── manifest.json      (必须)
         ├── YourPlugin.dll     (必须)
-        ├── dependencies.dll   (如果有依赖)
+        ├── ThirdParty.dll     (第三方托管依赖)
+        ├── VendorSDK.dll      (原生依赖库)
         └── config.json        (可选配置文件)
 ```
 
-### 示例
-
-```
-/Users/liuzhe/Documents/MyCatalyticData/
-└── plugins/
-    ├── acme.serial/
-    │   ├── manifest.json
-    │   ├── Acme.Serial.dll
-    │   └── System.IO.Ports.dll
-    │
-    └── acme.firmware-burner/
-        ├── manifest.json
-        ├── Acme.Burner.dll
-        └── firmware_config.json
-```
-
-### 注意
+### 10.4 部署注意
 
 添加或更新插件后，需要**重启 Catalytic Host** 才能加载新插件。
 
@@ -1280,7 +1031,7 @@ _context?.Log(LogLevel.Error, "错误：连接失败");
 **症状**：日志显示 "xxx 中没有找到 IPlugin 实现"
 
 **解决**：
-- 确保你的类实现了 `ICommunicator` 或 `IProcessor`
+- 确保类实现了 `ICommunicator` 或 `IProcessor`
 - 确保类是 `public` 的
 - 确保类不是 `abstract`
 
@@ -1329,7 +1080,7 @@ dotnet publish -c Release --self-contained false
 |------|------|
 | `CatalyticKit.dll` | SDK 动态库 |
 | `IPlugin.cs` | 插件接口定义 (`IPlugin` / `ICommunicator` / `IProcessor` / `IPluginContext`) |
-| `FlowDefinition.cs` | **[NEW v0.4.1]** 流程定义模型 (`FlowDefinition` / `StepDefinition` / `CheckRuleDefinition`) |
+| `FlowDefinition.cs` | 流程定义模型 (`FlowDefinition` / `StepDefinition` / `CheckRuleDefinition`) |
 | `ISlot.cs` | Slot 操作接口 (命令 + 事件 + `GetTestHistory`) |
 | `TestRecord.cs` | 测试历史记录模型 (`TestRecord` / `StepRecord` / `CheckDetail`) |
 | `IHostBridge.cs` | Host 桥接接口 (Host 必须实现) |
@@ -1337,16 +1088,93 @@ dotnet publish -c Release --self-contained false
 | `Service.cs` | 静态 Service 入口 (全局命令 + Slot 访问) |
 | `SlotProxy.cs` | ISlot 内部实现 (线程安全事件 + 命令转发) |
 | `ServiceNotInitializedException.cs` | Service 未初始化异常 |
+| `TestFinishedEventArgs.cs` | 测试完成事件参数 |
+| `IInterceptor.cs` | 拦截器接口定义 |
 | `CommAction.cs` | 标准通讯动作枚举 |
 | `CommunicatorExtensions.cs` | ICommunicator 便捷扩展方法 |
 | `ContextExtensions.cs` | IPluginContext 便捷扩展方法 |
-| `PluginEvents.cs` | 标准事件常量 |
-| `LogLevel.cs` | 日志级别枚举 |
 | `Extensions/ByteExtension.cs` | 字节数组工具 |
 | `Extensions/StringExtension.cs` | 字符串工具 |
 
 ---
 
-> **文档版本**: 0.5.3  
-> **最后更新**: 2026-03-23  
-> **适用 SDK 版本**: 0.5.3+
+---
+
+## 12. 通讯插件核心设计参考
+
+### 12.1 典型场景与核心挑战
+
+在多槽位（Multi-Slot）测试系统中，常常会遇到一种非对称架构：**所有槽位的整体动作由一个主控制器（如主控 PLC 或自研控制卡）统筹调度，而每个槽位又配备独立的检测仪器**。
+
+在这种场景下，主控 PLC 在配置中被设置为**共享资源 (`IsShared = true`)**。当多个槽位并发执行测试步骤，同时向同一个主控 PLC 发送请求时，底层的物理通讯链路（如同一个 TCP 连接）会混杂来自各个槽位的指令。如果插件不对请求与响应进行精准匹配，必然导致**响应窜槽**（如 Slot 0 收到了本该给 Slot 1 的响应），进而引发测试逻辑的彻底崩塌。
+
+### 12.2 前置要求：协议层面的槽位标识
+
+> [!CAUTION]
+> **硬件协议约束**
+> 
+> 要实现可靠的异步并发路由，**底层硬件的通讯协议在返回数据时，必须包含可识别的槽位标识符（Slot ID/Index）**。
+> 例如：向 PLC 发送 `MOVE_CYLINDER 2`（控制 2 号槽位气缸），PLC 响应必须为 `CYLINDER_DONE 2`。
+> 
+> 如果硬件协议不支持携带槽位标识，软件层面上将**无法实现真正的异步并发共享**。此时，开发者只能在插件中对整个通讯链路施加全局互斥锁（Mutex/Lock），强制将并发降级为排队串行执行，这将严重损失系统的测试吞吐量（UPH）。
+
+### 12.3 最佳实践：请求队列与异步路由机制
+
+为了完美解决上述问题，建议通讯器插件采用 **"FIFO 请求队列 + 后台异步分发"** 架构。以下是核心逻辑解析：
+
+#### 1. 状态记录入队（发送端）
+当 `ExecuteTask` 被调用以发送指令时，切勿假定当前的 `IsShared` 状态会永远保持不变。必须在发送数据的瞬间，将当前请求的元数据存入对应地址的队列中：
+
+```csharp
+// 维护每个物理地址的请求队列
+private readonly ConcurrentDictionary<string, ConcurrentQueue<(int slotIndex, bool isShared)>> _requestQueues = new();
+
+// 发送时记录身份
+_requestQueues.GetOrAdd(address, ...).Enqueue((slotIndex, options.IsShared));
+await client.SendAsync(payload);
+```
+
+#### 2. 后台循环读取（接收端）
+建立连接后，即刻启动一个完全独立的后台任务，持续监听底层流，将接收与发送解耦：
+
+```csharp
+_ = Task.Run(() => BackgroundReadLoop(address, client, cts.Token));
+```
+
+#### 3. 动态路由判决（分发端）
+在收到底层响应报文后，从队列中弹出一个请求记录，并根据该请求当初的 `IsShared` 属性执行路由判决：
+
+```csharp
+if (_requestQueues[address].TryDequeue(out var request))
+{
+    int targetSlot;
+    
+    if (request.isShared)
+    {
+        // 【共享模式】：设备可能乱序响应。不能信任 request.slotIndex
+        // 必须从硬件返回的报文中解析出设备侧的槽位号
+        var match = Regex.Match(msg, @"\d+"); 
+        if (!match.Success) continue; // 丢弃无法识别槽位的废弃帧
+        
+        int hardwareSlotNum = int.Parse(match.Value);
+        targetSlot = hardwareSlotNum - 1; // 设备(1-based) 转换为 系统(0-based)
+    }
+    else
+    {
+        // 【独占模式】：严格一问一答。直接信任发送时记录的槽位
+        targetSlot = request.slotIndex;
+    }
+
+    // 精准推送到目标槽位
+    _context?.PushEvent(targetSlot, address, PluginEventType.Result, msg);
+}
+```
+
+#### 机制优势总结
+1. **防窜槽**：通过报文解析，确保共享响应 100% 路由至正确的测试流。
+2. **状态解耦**：使用 FIFO 队列保存瞬间的并发状态，即使设备在“独占”与“共享”模式间被动态切换，路由逻辑也绝不会错乱。
+3. **吞吐最大化**：主线程发送完指令即刻返回，不阻塞等待，依靠后台循环完成匹配，最大化并发效能。
+
+---
+
+> **最后更新**: 2026-04-22  

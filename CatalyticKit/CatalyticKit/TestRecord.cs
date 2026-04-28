@@ -131,8 +131,8 @@ public abstract record CheckDetail
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
-        /// <summary>比较运算符，如 "&gt;"、"&lt;"、"&gt;="、"&lt;="、"=="、"!="</summary>
-        public string Operator { get; init; } = "";
+        /// <summary>比较运算符</summary>
+        public CheckOperator Operator { get; init; } = CheckOperator.None;
 
         /// <summary>配置的阈值</summary>
         public double ThresholdValue { get; init; }
@@ -166,8 +166,8 @@ public abstract record CheckDetail
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
-        /// <summary>比较运算符，如 "&gt;"、"&lt;"、"&gt;="、"&lt;="、"=="、"!="</summary>
-        public string Operator { get; init; } = "";
+        /// <summary>比较运算符</summary>
+        public CheckOperator Operator { get; init; } = CheckOperator.None;
 
         /// <summary>变量 A 的实际值</summary>
         public double ActualA { get; init; }

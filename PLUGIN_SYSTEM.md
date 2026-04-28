@@ -112,10 +112,10 @@ public interface IProcessor : IPlugin
 }
 ```
 
-### IInterceptor
+### ICoordinator
 
 ```csharp
-public interface IInterceptor : IPlugin
+public interface ICoordinator : IPlugin
 {
     // Return true to allow, false to skip/fail
     Task<bool> BeforeStepAsync(int slotIndex, int stepId, string stepName, CancellationToken ct);
@@ -125,7 +125,7 @@ public interface IInterceptor : IPlugin
 }
 ```
 
-> **Restriction**: Only ONE `IInterceptor` is allowed globally.
+> **Restriction**: Only ONE `ICoordinator` is allowed globally.
 
 ---
 
@@ -331,8 +331,8 @@ public interface IHostBridge
 |-----------|-----------|
 | `Service` static methods | Thread-safe (volatile + ConcurrentDictionary) |
 | `ISlot` event subscribe/unsubscribe | Thread-safe (lock-protected) |
-| `ISlot` event invocation | Snapshot pattern (no deadlock if handler calls Service) |
-| `ISlot` event handler exceptions | Caught by SDK, reported via `IHostBridge.ReportPluginError()` |
+| `ISlotEventHandler` invocation | Snapshot pattern (no deadlock if handler calls Service) |
+| `ISlotEventHandler` exceptions | Caught by SDK, reported via `IHostBridge.ReportPluginError()` |
 | `IHostBridge` implementation | **Must be thread-safe** (Host responsibility) |
 
 ---
@@ -366,4 +366,5 @@ Yes. Declare both in `capabilities`:
         "tasks": ["my_extension"]
     }
 }
+```
 ```

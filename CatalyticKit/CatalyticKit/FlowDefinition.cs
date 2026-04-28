@@ -31,10 +31,10 @@ public record StepDefinition
     public string StepName { get; init; } = "";
 
     /// <summary>
-    /// 步骤键（Key），供代码逻辑进行 if/switch 判断。
+    /// 步骤标签（Label），供代码逻辑进行 if/switch 判断。
     /// 例如："voltage_check"、"init"。
     /// </summary>
-    public string StepKey { get; init; } = "";
+    public string StepLabel { get; init; } = "";
 
     /// <summary>
     /// 该步骤是否为测试项。
@@ -81,8 +81,8 @@ public abstract record CheckRuleDefinition
     /// </summary>
     public record ThresholdRule : CheckRuleDefinition
     {
-        /// <summary>比较运算符，如 ">"、"<"、">="、"<="、"=="、"!="</summary>
-        public string Operator { get; init; } = "";
+        /// <summary>比较运算符</summary>
+        public CheckOperator Operator { get; init; } = CheckOperator.None;
 
         /// <summary>配置的阈值</summary>
         public double Value { get; init; }
@@ -102,8 +102,8 @@ public abstract record CheckRuleDefinition
     /// </summary>
     public record CompareRule : CheckRuleDefinition
     {
-        /// <summary>比较运算符，如 ">"、"<"、">="、"<="、"=="、"!="</summary>
-        public string Operator { get; init; } = "";
+        /// <summary>比较运算符</summary>
+        public CheckOperator Operator { get; init; } = CheckOperator.None;
     }
 
     /// <summary>
