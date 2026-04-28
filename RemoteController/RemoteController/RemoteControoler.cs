@@ -1,7 +1,7 @@
 namespace RemoteController;
 using CatalyticKit;
 
-public class RemoteControllerPlugin: IInterceptor
+public class RemoteControllerPlugin: ICoordinator
 {
     public string Name => "RemoteController";
 

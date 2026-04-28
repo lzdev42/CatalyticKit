@@ -153,15 +153,21 @@ public class CsvReporterPlugin : IProcessor
             }
             else if (def.CheckRule is CheckRuleDefinition.ThresholdRule thr)
             {
-                if (thr.Operator.Contains("<")) 
-                    upper = thr.Value.ToString("G");
-                else if (thr.Operator.Contains(">")) 
-                    lower = thr.Value.ToString("G");
-                else 
-                    lower = $"{thr.Operator}{thr.Value:G}";
+                switch (thr.Operator)
+                {
+                    case CheckOperator.LessThan or CheckOperator.LessThanOrEqual:
+                        upper = thr.Value.ToString("G");
+                        break;
+                    case CheckOperator.GreaterThan or CheckOperator.GreaterThanOrEqual:
+                        lower = thr.Value.ToString("G");
+                        break;
+                    default:
+                        lower = $"{thr.Operator}{thr.Value:G}";
+                        break;
+                }
             }
 
-	string measured = "NONE";
+	var measured = "NONE";
 	if (resultMap.TryGetValue(def.StepId, out var rec))
 	{
 		measured = EscapeCsv(rec.ResultValue ?? "");
