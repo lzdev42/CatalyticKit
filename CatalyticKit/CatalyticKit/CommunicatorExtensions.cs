@@ -2,49 +2,34 @@ namespace CatalyticKit;
 
 public static class CommunicatorExtensions
 {
-    extension (ICommunicator communicator)
+    public static async Task Execute(this ICommunicator communicator, int slotIndex,
+        string address,
+        CommAction action,
+        string payload,
+        int timeoutMs,
+        CancellationToken ct)
     {
-        /// <summary>
-        /// 使用枚举执行动作 (不返回结果，结果通过 PushEvent 上报)
-        /// </summary>
-        public Task ExecuteTask(int slotIndex, 
-            string address,
-            CommAction action,
-            string payload,
-            int timeoutMs,
-            CancellationToken ct)
-        {
-            return communicator.ExecuteTask(slotIndex, address, action, payload, new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-        }
-
-        /// <summary>
-        /// 发送数据
-        /// </summary>
-        public Task SendAsync(int slotIndex, string address, string data, CancellationToken ct = default)
-            => communicator.ExecuteTask(slotIndex, address, CommAction.Send, data, new ExecuteOptions { TimeoutMs = 5000 }, ct);
-
-        /// <summary>
-        /// 读取数据 (不返回结果，结果通过 PushEvent 上报)
-        /// </summary>
-        public Task ReadAsync(int slotIndex, string address, int timeoutMs, CancellationToken ct = default)
-            => communicator.ExecuteTask(slotIndex, address, CommAction.Read, "", new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-
-        /// <summary>
-        /// 建立连接
-        /// </summary>
-        public Task ConnectAsync(int slotIndex, string address, int timeoutMs = 5000, CancellationToken ct = default)
-            => communicator.ExecuteTask(slotIndex, address, CommAction.Connect, "", new ExecuteOptions { TimeoutMs = timeoutMs }, ct);
-
-        /// <summary>
-        /// 断开连接
-        /// </summary>
-        public Task DisconnectAsync(int slotIndex, string address, CancellationToken ct = default)
-            => communicator.ExecuteTask(slotIndex, address, CommAction.Disconnect, "", new ExecuteOptions { TimeoutMs = 1000 }, ct);
-
-        /// <summary>
-        /// 查询连接状态 (不返回结果，结果通过 PushEvent 上报)
-        /// </summary>
-        public Task GetStatusAsync(int slotIndex, string address, CancellationToken ct = default)
-            => communicator.ExecuteTask(slotIndex, address, CommAction.Status, "", new ExecuteOptions { TimeoutMs = 1000 }, ct);
+        await communicator.Execute(slotIndex, address, action, payload,
+            new CommOptions { TimeoutMs = timeoutMs }, ct);
     }
+
+    public static async Task SendAsync(this ICommunicator communicator, int slotIndex, string address, string data, CancellationToken ct = default)
+        => await communicator.Execute(slotIndex, address, CommAction.Send, data,
+            new CommOptions { TimeoutMs = 5000 }, ct);
+
+    public static async Task ReadAsync(this ICommunicator communicator, int slotIndex, string address, int timeoutMs, CancellationToken ct = default)
+        => await communicator.Execute(slotIndex, address, CommAction.Read, "",
+            new CommOptions { TimeoutMs = timeoutMs }, ct);
+
+    public static async Task ConnectAsync(this ICommunicator communicator, int slotIndex, string address, int timeoutMs = 5000, CancellationToken ct = default)
+        => await communicator.Execute(slotIndex, address, CommAction.Connect, "",
+            new CommOptions { TimeoutMs = timeoutMs }, ct);
+
+    public static async Task DisconnectAsync(this ICommunicator communicator, int slotIndex, string address, CancellationToken ct = default)
+        => await communicator.Execute(slotIndex, address, CommAction.Disconnect, "",
+            new CommOptions { TimeoutMs = 1000 }, ct);
+
+    public static async Task GetStatusAsync(this ICommunicator communicator, int slotIndex, string address, CancellationToken ct = default)
+        => await communicator.Execute(slotIndex, address, CommAction.Status, "",
+            new CommOptions { TimeoutMs = 1000 }, ct);
 }

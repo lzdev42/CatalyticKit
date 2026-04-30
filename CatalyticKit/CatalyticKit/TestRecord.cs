@@ -78,11 +78,11 @@ public record StepRecord
     /// 检查结果详情。为 null 表示该步骤未配置检查规则（无检查步骤视为执行成功）。
     /// 使用 C# pattern matching 按类型访问：
     /// <code>
-    /// if (step.Check is CheckDetail.RangeCheck r)
+    /// if (step.Check is CheckResult.RangeCheck r)
     ///     Console.WriteLine($"Min={r.Min}, Max={r.Max}, Actual={r.Actual}");
     /// </code>
     /// </summary>
-    public CheckDetail? Check { get; init; }
+    public CheckResult? Check { get; init; }
 
     /// <summary>
     /// 该步骤从设备响应中提取并存入变量池的变量快照。
@@ -96,9 +96,9 @@ public record StepRecord
 /// <summary>
 /// 检查结果详情的 discriminated union。
 /// 按检查模板（template）类型分为不同子类，每种子类型含完全强类型的字段。
-/// 使用 C# pattern matching 访问：<c>if (check is CheckDetail.RangeCheck r) { ... }</c>
+/// 使用 C# pattern matching 访问：<c>if (check is CheckResult.RangeCheck r) { ... }</c>
 /// </summary>
-public abstract record CheckDetail
+public abstract record CheckResult
 {
     /// <summary>该步骤检查是否通过</summary>
     public abstract bool Passed { get; init; }
@@ -107,7 +107,7 @@ public abstract record CheckDetail
     /// 范围检查（range_check）：验证变量值是否在 [Min, Max] 区间内。
     /// 对应低代码脚本中配置的 min / max 参数。
     /// </summary>
-    public record RangeCheck : CheckDetail
+    public record RangeCheck : CheckResult
     {
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
@@ -126,7 +126,7 @@ public abstract record CheckDetail
     /// 阈值检查（threshold）：验证变量值与单一阈值的关系，如 value &gt;= 3.0。
     /// 对应低代码脚本中配置的 operator / value 参数。
     /// </summary>
-    public record Threshold : CheckDetail
+    public record Threshold : CheckResult
     {
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
@@ -145,7 +145,7 @@ public abstract record CheckDetail
     /// 字符串包含检查（contains）：验证字符串变量是否包含指定子串。
     /// 对应低代码脚本中配置的 substring 参数。
     /// </summary>
-    public record Contains : CheckDetail
+    public record Contains : CheckResult
     {
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
@@ -161,7 +161,7 @@ public abstract record CheckDetail
     /// 双变量比较（compare）：验证两个变量之间的数值关系，如 voltage_a &gt;= voltage_b。
     /// 对应低代码脚本中配置的 var_a / operator / var_b 参数。
     /// </summary>
-    public record Compare : CheckDetail
+    public record Compare : CheckResult
     {
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
@@ -181,7 +181,7 @@ public abstract record CheckDetail
     /// 当 Engine 返回的 template 字段不在上述已知类型中时使用，以保证前向兼容。
     /// 插件可访问 <see cref="RawJson"/> 自行解析。
     /// </summary>
-    public record Unknown : CheckDetail
+    public record Unknown : CheckResult
     {
         /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }

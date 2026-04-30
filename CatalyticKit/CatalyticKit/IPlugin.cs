@@ -17,7 +17,7 @@ public interface IPlugin
     /// 在此进行初始化工作（建立连接、注册回调、启动后台线程等）
     /// </summary>
     /// <param name="context">插件上下文</param>
-    Task ActivateAsync(IPluginContext context);
+    Task ActivateAsync(ICommChannel channel);
 
     /// <summary>
     /// 插件停用时调用

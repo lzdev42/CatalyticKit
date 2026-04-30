@@ -71,12 +71,18 @@ internal class SlotProxy : ISlot, ISlotEventHandler
         => _bridge.SlotGetVariable(Index, name);
     public TestRecord? GetTestHistory()
         => _bridge.SlotGetHistory(Index);
-    public StepContext? GetCurrentStep()
+    public Step? GetCurrentStep()
         => _bridge.GetCurrentStep(Index);
     public void ReportPass()
         => _bridge.ReportStepResult(Index, true, null);
     public void ReportFail(string reason)
         => _bridge.ReportStepResult(Index, false, reason);
+
+    public void SubmitValue(string value)
+        => _bridge.SubmitStepValue(Index, value);
+
+    public void Report(bool passed, string value, string? reason = null)
+        => _bridge.ReportStepResultWithValue(Index, passed, value, reason);
 
     // --- 事件分发 (由 Host 调用, 快照机制 + try-catch 保护) ---
 

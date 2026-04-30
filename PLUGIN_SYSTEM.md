@@ -1,6 +1,6 @@
 # Plugin System Design
 
-> SDK Version: 0.6.0 | Updated: 2026-03-25
+> SDK Version: 0.7.0 | Updated: 2026-04-30
 
 ## Overview
 
@@ -13,9 +13,9 @@ catalytic/
 ├── Catalytic.exe
 ├── config.json
 └── plugins/
-    ├── catalytic.serial/
+    ├── catalytic.socket-client/
     │   ├── manifest.json
-    │   └── Catalytic.Serial.dll
+    │   └── SocketClient.dll
     ├── acme.modbus-driver/
     │   ├── manifest.json
     │   └── ModbusDriver.dll
@@ -43,7 +43,7 @@ catalytic/
     "author": "Acme Corp",
     "entry": "AcmeScpiDriver.dll",
     "capabilities": {
-        "protocols": ["serial"],
+        "protocols": ["tcp"],
         "tasks": []
     }
 }
@@ -71,7 +71,7 @@ Plugins must implement interfaces from `CatalyticKit`:
 public interface IPlugin
 {
     string Id { get; }
-    Task ActivateAsync(IPluginContext context);
+    Task ActivateAsync(ICommChannel channel);
     Task DeactivateAsync();
 }
 ```
@@ -83,17 +83,17 @@ public interface ICommunicator : IPlugin
 {
     string Protocol { get; }
     
-    // Execute task (no return value, result reported via PushEvent)
-    Task ExecuteTask(
+    // Execute communication (results reported via channel.ReportData)
+    Task Execute(
         int slotIndex,
         string address,
         CommAction action,
         string payload,
-        ExecuteOptions options,
+        CommOptions options,
         CancellationToken ct);
 }
 
-public class ExecuteOptions
+public class CommOptions
 {
     public int TimeoutMs { get; set; }
     public string? Terminator { get; set; }      // Serialized delimiter
@@ -101,18 +101,22 @@ public class ExecuteOptions
 }
 ```
 
-### IProcessor
+### IProcessor (For Custom Business Logic)
 
 ```csharp
 public interface IProcessor : IPlugin
 {
-    string TaskName { get; }
+    /// <summary>
+    /// The command name supported by this processor.
+    /// Used to reference this plugin in flow scripts.
+    /// </summary>
+    string Command { get; }
     
     Task ExecuteAsync(int slotIndex, CancellationToken ct);
 }
 ```
 
-### ICoordinator
+### ICoordinator (For Flow Control/Interception)
 
 ```csharp
 public interface ICoordinator : IPlugin
@@ -124,8 +128,6 @@ public interface ICoordinator : IPlugin
     Task AfterStepAsync(int slotIndex, int stepId, string stepName, bool passed);
 }
 ```
-
-> **Restriction**: Only ONE `ICoordinator` is allowed globally.
 
 ---
 
@@ -155,24 +157,15 @@ Host uses this logic:
   "device_types": {
     "dmm": {
       "protocol": "unused",
-      "plugin_id": "catalytic.serial"
+      "plugin_id": "catalytic.socket-client"
     },
     "special_instrument": {
       "protocol": "scpi",
       "plugin_id": "vendor.custom-scpi"
-      // Explicitly use this specific plugin
     }
   }
 }
 ```
-
-### Matching Priority
-
-| Priority | Condition | Action |
-|----------|-----------|--------|
-| 1 | `plugin_id` specified in device config | Use that exact plugin |
-| 2 | No `plugin_id`, use `protocol` | Find plugin by `capabilities.protocols` |
-| 3 | No matching plugin | Return error to Engine |
 
 ---
 
@@ -183,18 +176,15 @@ Host Startup
     │
     ├─ Scan plugins/ directory
     ├─ Load manifest.json for each plugin
-    ├─ Build lookup tables:
-    │   ├─ _pluginsById["acme.scpi-driver"] = ...
-    │   └─ _pluginsByProtocol["scpi"] = ...
-    │
-    └─ For each plugin: call ActivateAsync()
-
+    ├─ For each plugin: call ActivateAsync(channel)
+    └─ Plugin is ready
+    
 During Runtime
     │
-    ├─ Engine sends EngineTaskCallback(protocol="scpi")
+    ├─ Engine sends command
     ├─ Host finds matching plugin
-    └─ Host calls plugin.ExecuteTask()
-       (Plugin later calls context.PushEvent to report result)
+    └─ Host calls plugin.Execute() or plugin.ExecuteAsync()
+       └─ Plugin reports data/results back via channel or slot object
 
 Host Shutdown
     │
@@ -203,24 +193,22 @@ Host Shutdown
 
 ---
 
-## Plugin Context
+## Communication Channel (ICommChannel)
 
-Plugins receive an `IPluginContext` when activated:
+Plugins receive an `ICommChannel` when activated:
 
 ```csharp
-public interface IPluginContext
+public interface ICommChannel
 {
-    /// Plugin's directory path (for accessing bundled resources)
     string PluginDirectory { get; }
     
-    /// Get another protocol driver (for inter-plugin communication)
     ICommunicator? GetCommunicator(string protocolOrId);
     
-    /// Push event to Host (Result will be routed to Engine)
-    void PushEvent(int slotIndex, string address, PluginEventType eventType, string data);
+    /// Report raw data back to Host (Engine will then perform check rules)
+    void ReportData(int slotIndex, string address, string data);
 
-    /// Notify device connection state change (Routed to DeviceManager by address)
-    void NotifyConnectionStateChanged(string address, PluginDeviceConnectionState state);
+    /// Notify device connection state changes
+    void NotifyState(string address, DeviceState state);
 }
 ```
 
@@ -233,20 +221,16 @@ For `HostControlled` tasks (Extended mode), the system provides a **"Raw Conduit
 ### User Interface Layer (Kotlin)
 1. User enters a string in the "Parameters" text box.
 2. The UI layer encodes this string using **Base64**.
-3. It is stored in the flow script as a plain JSON string (avoiding escaping issues with special characters in nested JSON).
+3. It is stored in the flow script as a plain JSON string.
 
 ### Host Layer (C#)
-1. When the Engine status reports a step index, the Host looks up the corresponding `StepDefinition`.
-2. The `Params` field is **decoded from Base64** back into its original UTF-8 string.
-3. This "Original String" is stored in the `StepContext` for that slot.
+1. When the Engine status reports a step index, the Host looks up the corresponding `Step` configuration.
+2. The `Params` field is **decoded from Base64** back into its original string.
 
 ### Plugin Layer (C#)
 1. The plugin calls `Service.Slot(x).GetCurrentStep().Params`.
-2. It receives the **identical string** as entered in the UI, regardless of line breaks, quotes, or JSON-like syntax.
-3. The plugin developer is responsible for interpreting the content (e.g., using `JsonConvert.DeserializeObject` if the expected format is JSON).
-
-> [!TIP]
-> This design ensures that the system is entirely agnostic to the parameter format. The parameter box acts as a binary-safe buffer between the user and the plugin.
+2. It receives the **identical string** as entered in the UI.
+3. The plugin developer interprets the content (e.g., JSON parsing).
 
 ---
 
@@ -256,72 +240,63 @@ Plugins can actively control the test flow via the static `Service` class:
 
 ```csharp
 // Global commands
-Service.AddPluginLog(id, msg);   // Record plugin specific log
-Service.StartAll();              // Start all slots
+Service.AddPluginLog(id, msg);   
+Service.StartAll();              
 
 // Per-slot commands
-Service.Slot(0).Start();         // Start slot 0
-Service.Slot(0).Stop();          // Stop slot 0
-Service.Slot(0).SetSN("ABC");    // Set SN for slot 0
+Service.Slot(0).Start();         
+Service.Slot(0).Stop();          
+Service.Slot(0).SetSn("ABC");    
 
-// Get global flow information [NEW v0.4.1]
-var flow = Service.GetFlowDefinition();   // Get all steps, limits, labels
-var folder = Service.ReportFolder();      // Get absolute path to {WorkDir}/reports
+// Reporting (For IProcessor plugins)
+Service.Slot(0).SubmitValue("3.31");                  // Submit value for Engine to judge
+Service.Slot(0).Report(true, "3.31", "Check OK");     // Direct report (pass/fail + value)
 
-// Read variables (extracted by Engine steps)
-var voltage = Service.Slot(0).GetVariable("voltage");  // Returns JSON string or null
+// Get global flow information
+var flow = Service.GetFlowDefinition();   // Returns TestFlow object
+var folder = Service.ReportFolder();      
 
-// Get full test history after test completes (call in TestFinished handler)
+// Get current step info
+var step = Service.Slot(0).GetCurrentStep(); // Returns Step object (Id, Name, Params, etc.)
+
+// Read variables
+var voltage = Service.Slot(0).GetVariable("voltage");  
+
+// Get full test history
 Service.Slot(0).TestFinished += (passed, _) =>
 {
     var record = Service.Slot(0).GetTestHistory();  // Returns TestRecord? 
-    // record.Steps contains StepRecord list with IsTestItem, Check (strongly-typed), etc.
+    // record.Steps contains StepRecord list with IsTestItem, CheckResult (strongly-typed), etc.
 };
-
-// Per-slot events
-Service.Slot(0).TestStarted += () => { /* ... */ };
-Service.Slot(0).TestFinished += (passed, msg) => { /* ... */ };
-Service.Slot(0).StepFinished += (stepIndex, passed) => { /* ... */ };
 ```
 
-> **Note**: `SetVariable` is a no-op. Variables are managed by Engine steps (via parse rules) and read-only from the plugin side. Use `GetVariable` to read extracted values.
-
-### IHostBridge (Host Must Implement)
-
-Host provides the actual implementation via `Service.SetBridge(bridge)` at startup:
+### IHostBridge (Host Implementation Interface)
 
 ```csharp
 public interface IHostBridge
 {
-    // Global Commands
-    void AddPluginLog(string pluginId, string message); // 记录日志
+    void AddPluginLog(string pluginId, string message);
     void StartAll();
     void StopAll();
 
-    // Slot Commands
     void SlotStart(int slotIndex);
     void SlotStop(int slotIndex);
-    void SlotSetSN(int slotIndex, string sn);
-    void SlotSetVariable(int slotIndex, string name, string jsonValue);  // No-op (variables managed by Engine)
-    string? SlotGetVariable(int slotIndex, string name);  // Reads from Engine VariablePool
-    TestRecord? SlotGetHistory(int slotIndex);  // Returns full typed test history; call after TestFinished
+    void SetSlotSn(int slotIndex, string sn);
+    string? SlotGetVariable(int slotIndex, string name);
+    TestRecord? SlotGetHistory(int slotIndex);
     
-    // Global flow info
-    FlowDefinition? GetFlowDefinition();
+    TestFlow? GetFlowDefinition();
     string GetReportFolder();
 
-    // Event Subscription
+    Step? GetCurrentStep(int slotIndex);
+    void ReportStepResult(int slotIndex, bool passed, string? failReason);
+    void SubmitStepValue(int slotIndex, string value);
+    void ReportStepResultWithValue(int slotIndex, bool passed, string value, string? reason);
+
     void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
     void UnsubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
-
-    // Error Reporting
-    void ReportPluginError(string pluginId, Exception exception);
 }
 ```
-
-> **Note**: All `IHostBridge` methods may be called from any thread concurrently. Implementations must be thread-safe.
->
-> **Implementation Detail**: Engine automatically resets all slot data (variables, step results, errors) when `SlotStart` is called, ensuring clean state for each test run.
 
 ---
 
@@ -329,42 +304,7 @@ public interface IHostBridge
 
 | Component | Guarantee |
 |-----------|-----------|
-| `Service` static methods | Thread-safe (volatile + ConcurrentDictionary) |
-| `ISlot` event subscribe/unsubscribe | Thread-safe (lock-protected) |
-| `ISlotEventHandler` invocation | Snapshot pattern (no deadlock if handler calls Service) |
-| `ISlotEventHandler` exceptions | Caught by SDK, reported via `IHostBridge.ReportPluginError()` |
-| `IHostBridge` implementation | **Must be thread-safe** (Host responsibility) |
-
----
-
-## FAQ
-
-### Can one plugin support multiple protocols?
-
-Yes. Declare them in `capabilities.protocols`:
-
-```json
-{
-    "capabilities": {
-        "protocols": ["scpi", "scpi-raw", "visa"]
-    }
-}
-```
-
-### What if two plugins claim the same protocol?
-
-Host startup will fail with an error. User must remove one plugin or explicitly assign `plugin_id` in device configuration.
-
-### Can a plugin be both ICommunicator and IProcessor?
-
-Yes. Declare both in `capabilities`:
-
-```json
-{
-    "capabilities": {
-        "protocols": ["scpi"],
-        "tasks": ["my_extension"]
-    }
-}
-```
-```
+| `Service` static methods | Thread-safe |
+| `ISlot` event subscribe/unsubscribe | Thread-safe |
+| `ISlotEventHandler` invocation | Snapshot pattern |
+| `IHostBridge` implementation | **Must be thread-safe** |

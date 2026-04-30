@@ -59,7 +59,7 @@ public interface ISlot
     /// <summary>
     /// 获取当前正在执行的步骤的完整上下文（已将 JSON 跨语言参数解析为强类型/字典）
     /// </summary>
-    StepContext? GetCurrentStep();
+    Step? GetCurrentStep();
 
     /// <summary>
     /// 报告当前步骤的业务逻辑为：通过 (Pass)
@@ -71,6 +71,23 @@ public interface ISlot
     /// </summary>
     /// <param name="reason">失败的具体原因</param>
     void ReportFail(string reason);
+
+    /// <summary>
+    /// 提交本步骤的测量值，交由引擎对照检查规则判决 Pass/Fail。
+    /// 适用于业务逻辑插件自行计算出测量值，但判决规则由引擎配置决定的场景。
+    /// </summary>
+    /// <param name="value">测量值字符串，例如 "3.31"</param>
+    void SubmitValue(string value);
+
+    /// <summary>
+    /// 提交本步骤的测量值和判决结果（插件自行判决）。
+    /// 适用于业务逻辑插件自行判断 Pass/Fail，同时需要记录实测值到报告的场景。
+    /// </summary>
+    /// <param name="passed">步骤是否通过</param>
+    /// <param name="value">实际测量值字符串，例如 "3.31"</param>
+    /// <param name="reason">失败原因，通过时传 null</param>
+    void Report(bool passed, string value, string? reason = null);
+
     
     // --- Events (Host -> 插件) ---
 

@@ -14,7 +14,7 @@ public interface ICommunicator : IPlugin
 
     /// <summary>
     /// 执行通讯任务
-    /// 插件应在此方法内部完成通讯动作，并通过 IPluginContext.PushEvent(PluginEventType.Result) 上报结果
+    /// 插件应在此方法内部完成通讯动作，并通过 ICommChannel.ReportData 上报结果
     /// 禁止通过 return 返回结果（返回值已无意义）
     /// </summary>
     /// <param name="slotIndex">槽位索引</param>
@@ -23,19 +23,19 @@ public interface ICommunicator : IPlugin
     /// <param name="payload">命令数据</param>
     /// <param name="options">执行选项</param>
     /// <param name="ct">取消令牌</param>
-    Task ExecuteTask(
+    Task Execute(
         int slotIndex,
         string address,
         CommAction action,
         string payload,
-        ExecuteOptions options,
+        CommOptions options,
         CancellationToken ct);
 }
 
 /// <summary>
 /// 通讯执行选项
 /// </summary>
-public class ExecuteOptions
+public class CommOptions
 {
     /// <summary>
     /// 超时时间（毫秒）

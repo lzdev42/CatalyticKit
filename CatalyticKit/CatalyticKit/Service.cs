@@ -153,7 +153,7 @@ public static class Service
     /// </summary>
     /// <returns>完整的流程定义；若 Engine 尚未加载流程则返回 null</returns>
     /// <exception cref="ServiceNotInitializedException">如果 Host 尚未初始化 Service</exception>
-    public static FlowDefinition? GetFlowDefinition()
+    public static TestFlow? GetFlowDefinition()
     {
         if (_bridge is not { } bridge)
             throw new ServiceNotInitializedException();

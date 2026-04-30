@@ -10,7 +10,7 @@ public interface IProcessor : IPlugin
     /// 该处理器支持的任务名称。
     /// 此名称用于在低代码脚本或配置中引用此插件执行特定操作。
     /// </summary>
-    string TaskName { get; }
+    string Command { get; }
 
     /// <summary>
     /// 执行处理逻辑

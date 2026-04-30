@@ -9,23 +9,23 @@ namespace CsvReporter;
 /// </summary>
 public class CsvReporterPlugin : IProcessor
 {
-    private IPluginContext? _context;
+    private ICommChannel? _channel;
     private string _outputDir = "";
-    private IReadOnlyList<StepDefinition>? _testItems;
+    private IReadOnlyList<Step>? _testItems;
 
     // 静态文件锁：确保多 Slot 并发完成时，排队安全地追加写入同一个 CSV
     private static readonly SemaphoreSlim _fileWriteLock = new SemaphoreSlim(1, 1);
 
     public string Id    => "catalytic.csv-reporter-daily";
-    public string TaskName => "generate_csv_report";
+    public string Command => "csv_reporter";
 
     // ──────────────────────────────────────────────
     // IPlugin Lifecycle
     // ──────────────────────────────────────────────
 
-    public Task ActivateAsync(IPluginContext context)
+    public Task ActivateAsync(ICommChannel channel)
     {
-        _context = context;
+        _channel = channel;
        Service.AddPluginLog(pluginId:Id,"[CsvReporter] 插件已激活。");
 
         _outputDir = Service.ReportFolder();
@@ -124,7 +124,7 @@ public class CsvReporterPlugin : IProcessor
         if (templateItems.Count == 0)
         {
             templateItems = history.Steps.Where(s => s.IsTestItem)
-                                         .Select(s => new StepDefinition { StepId = s.StepId, StepName = s.StepName, IsTestItem = true })
+                                         .Select(s => new Step { StepId = s.StepId, StepName = s.StepName, IsTestItem = true })
                                          .ToList();
         }
 
@@ -146,12 +146,12 @@ public class CsvReporterPlugin : IProcessor
             string lower = "";
             string upper = "";
 
-            if (def.CheckRule is CheckRuleDefinition.RangeRule range)
+            if (def.CheckRule is CheckRule.RangeRule range)
             {
                 lower = range.Min.ToString("G");
                 upper = range.Max.ToString("G");
             }
-            else if (def.CheckRule is CheckRuleDefinition.ThresholdRule thr)
+            else if (def.CheckRule is CheckRule.ThresholdRule thr)
             {
                 switch (thr.Operator)
                 {
@@ -173,7 +173,7 @@ public class CsvReporterPlugin : IProcessor
 		measured = EscapeCsv(rec.ResultValue ?? "");
 		if (!rec.Passed) isOverallPass = false;
 
-		if (string.IsNullOrEmpty(lower) && string.IsNullOrEmpty(upper) && rec.Check is CheckDetail.RangeCheck rc)
+		if (string.IsNullOrEmpty(lower) && string.IsNullOrEmpty(upper) && rec.Check is CheckResult.RangeCheck rc)
 		{
 			lower = rc.Min.ToString("G");
 			upper = rc.Max.ToString("G");

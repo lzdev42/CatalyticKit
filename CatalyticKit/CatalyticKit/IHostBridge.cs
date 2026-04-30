@@ -68,11 +68,11 @@ public interface IHostBridge
     TestRecord? SlotGetHistory(int slotIndex);
 
     /// <summary>
-    /// 获取当前已加载的测试流程定义（全量步骤静态配置，不依赖任何测试执行历史）。
+    /// 获取当前已加载的测试流程配置（静态配置，不依赖任何测试执行历史）。
     /// 可在测试开始前调用，用于获取所有测试项的名称和检查上下限，以生成 CSV 报告表头等。
     /// </summary>
     /// <returns>完整的流程定义；若 Engine 尚未加载流程则返回 null</returns>
-    FlowDefinition? GetFlowDefinition();
+    TestFlow? GetFlowDefinition();
 
     /// <summary>
     /// 获取报告输出目录的绝对路径（即工作目录下的 reports 子目录）。
@@ -87,7 +87,7 @@ public interface IHostBridge
     /// <summary>
     /// 获取指定 Slot 当前所在步骤的上下文原数据
     /// </summary>
-    StepContext? GetCurrentStep(int slotIndex);
+    Step? GetCurrentStep(int slotIndex);
 
     /// <summary>
     /// 向引擎原生接口主动提报当前步骤的执行结果
@@ -96,6 +96,16 @@ public interface IHostBridge
     /// <param name="passed">步骤是否判定为通过</param>
     /// <param name="failReason">失败的具体原因，可通过时传 null</param>
     void ReportStepResult(int slotIndex, bool passed, string? failReason);
+
+    /// <summary>
+    /// 提交当前步骤的测量值，由引擎对照检查规则判决结果
+    /// </summary>
+    void SubmitStepValue(int slotIndex, string value);
+
+    /// <summary>
+    /// 提交当前步骤的测量值和判决结果（插件自行判决）
+    /// </summary>
+    void ReportStepResultWithValue(int slotIndex, bool passed, string value, string? reason);
     
     /// <summary>
     /// 登记当前 Slot 正在运行的 Host 类型任务 (用于生命周期关联和取消)

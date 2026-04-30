@@ -53,11 +53,11 @@ namespace SocketClient.Plugin;
 ///    2. 从 _requestQueues[address] 队列出队一个请求记录
 ///    3. 如果 request.isShared=true：从消息内容解析槽位号（正则匹配数字，减1）
 ///    4. 如果 request.isShared=false：使用请求记录中的 slotIndex
-///    5. 调用 PushEvent(targetSlot, address, Result, msg) 推送到对应槽位
+///    5. 调用 ReportData(targetSlot, address, msg) 推送到对应槽位
 /// </summary>
 public class SocketCommunicator : ICommunicator
 {
-    private IPluginContext? _context;
+    private ICommChannel? _channel;
     
     /// <summary>
     /// 用于从共享设备的响应消息中解析槽位号。
@@ -88,10 +88,10 @@ public class SocketCommunicator : ICommunicator
     public string Id => "catalytic.socket-client";
     public string Protocol => "tcp";
 
-    public Task ActivateAsync(IPluginContext context)
+    public Task ActivateAsync(ICommChannel channel)
     {
         Service.AddPluginLog(Id, "插件激活开始");
-        _context = context;
+        _channel = channel;
         Service.AddPluginLog(Id, "插件激活完成");
         return Task.CompletedTask;
     }
@@ -110,12 +110,12 @@ public class SocketCommunicator : ICommunicator
         return Task.CompletedTask;
     }
 
-    public async Task ExecuteTask(
+    public async Task Execute(
         int slotIndex,
         string address,
         CommAction action,
         string payload,
-        ExecuteOptions options,
+        CommOptions options,
         CancellationToken ct)
     {
         Service.AddPluginLog(Id, $"ExecuteTask 调用: slotIndex={slotIndex}, address={address}, action={action}, payload=[{payload}], isShared={options.IsShared}");
@@ -157,7 +157,7 @@ public class SocketCommunicator : ICommunicator
                         Service.AddPluginLog(Id, $"客户端已移除: {address}");
                         old.cts.Cancel();
                         old.client.Dispose();
-                        _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Disconnected);
+                        _channel?.NotifyState(address, DeviceState.Disconnected);
                         Service.AddPluginLog(Id, $"通知断开状态: {address}");
                     }
                     else
@@ -166,9 +166,9 @@ public class SocketCommunicator : ICommunicator
                     }
                     break;
                 case CommAction.Status:
-                    var state = _clients.ContainsKey(address) ? PluginDeviceConnectionState.Connected : PluginDeviceConnectionState.Disconnected;
+                    var state = _clients.ContainsKey(address) ? DeviceState.Connected : DeviceState.Disconnected;
                     Service.AddPluginLog(Id, $"状态查询: address={address}, state={state}");
-                    _context?.NotifyConnectionStateChanged(address, state);
+                    _channel?.NotifyState(address, state);
                     break;
             }
             Service.AddPluginLog(Id, $"ExecuteTask 完成: action={action}, address={address}");
@@ -180,14 +180,14 @@ public class SocketCommunicator : ICommunicator
         }
     }
 
-    private async Task HandleConnect(int slotIndex, string address, ExecuteOptions options)
+    private async Task HandleConnect(int slotIndex, string address, CommOptions options)
     {
         Service.AddPluginLog(Id, $"HandleConnect 开始: slotIndex={slotIndex}, address={address}, isShared={options.IsShared}");
 
         if (_clients.ContainsKey(address))
         {
             Service.AddPluginLog(Id, $"客户端已存在，跳过连接: {address}");
-            _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Connected);
+            _channel?.NotifyState(address, DeviceState.Connected);
             return;
         }
 
@@ -203,7 +203,7 @@ public class SocketCommunicator : ICommunicator
         if (_clients.TryAdd(address, (client, cts)))
         {
             Service.AddPluginLog(Id, $"客户端已添加到字典: {address}");
-            _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Connected);
+            _channel?.NotifyState(address, DeviceState.Connected);
             Service.AddPluginLog(Id, $"后台读取任务已启动: address={address}, entrySlot={slotIndex}, isShared={options.IsShared}");
             _ = Task.Run(() => BackgroundReadLoop(slotIndex, address, client, options.IsShared, cts.Token));
         }
@@ -232,7 +232,7 @@ public class SocketCommunicator : ICommunicator
             {
                 Service.AddPluginLog(Id, $"BackgroundReadLoop 异常退出: address={address}, 异常={ex.Message}");
                 _clients.TryRemove(address, out _);
-                _context?.NotifyConnectionStateChanged(address, PluginDeviceConnectionState.Disconnected);
+                _channel?.NotifyState(address, DeviceState.Disconnected);
                 break;
             }
 
@@ -276,8 +276,8 @@ public class SocketCommunicator : ICommunicator
             // 【重要】推送到 Service 时使用 <slotIndex, address> 格式。
             // Service 通过 slotIndex 判定数据归属哪个槽位。
             // 共享设备时仅靠 address 无法区分槽位，必须使用 slotIndex。
-            Service.AddPluginLog(Id, $"推送事件: address={address}, targetSlot={targetSlot}, eventType={PluginEventType.Result}, msg=[{msg}]");
-            _context?.PushEvent(targetSlot, address, PluginEventType.Result, msg);
+            Service.AddPluginLog(Id, $"推送事件: address={address}, targetSlot={targetSlot}, eventType=Data, msg=[{msg}]");
+            _channel?.ReportData(targetSlot, address, msg);
         }
 
         Service.AddPluginLog(Id, $"BackgroundReadLoop 退出: address={address}, IsCancellationRequested={token.IsCancellationRequested}");

@@ -6,7 +6,7 @@ public class RemoteControllerPlugin: ICoordinator
     public string Name => "RemoteController";
 
     public string Id => "catalytic.remote-controller";
-    public string TaskName => "RemoteControl";
+
 
     public Task DeactivateAsync()
     {
@@ -15,7 +15,7 @@ public class RemoteControllerPlugin: ICoordinator
         return Task.CompletedTask;
     }
 
-    public Task ActivateAsync(IPluginContext context)
+    public Task ActivateAsync(ICommChannel channel)
     {
         Service.SlotFinished += OnSlotFinished;
         Service.AddPluginLog(pluginId:Id, "[RemoteControl] 插件已激活。");
