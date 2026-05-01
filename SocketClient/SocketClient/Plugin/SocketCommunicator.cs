@@ -90,23 +90,23 @@ public class SocketCommunicator : ICommunicator
 
     public Task ActivateAsync(ICommChannel channel)
     {
-        Service.AddPluginLog(Id, "插件激活开始");
+        Host.AddPluginLog(Id, "插件激活开始");
         _channel = channel;
-        Service.AddPluginLog(Id, "插件激活完成");
+        Host.AddPluginLog(Id, "插件激活完成");
         return Task.CompletedTask;
     }
 
     public Task DeactivateAsync()
     {
-        Service.AddPluginLog(Id, $"插件停用开始，当前客户端数: {_clients.Count}");
+        Host.AddPluginLog(Id, $"插件停用开始，当前客户端数: {_clients.Count}");
         foreach (var (client, cts) in _clients.Values)
         {
-           // Service.AddPluginLog(Id, $"正在断开客户端: {client.Address}");
+           // Host.AddPluginLog(Id, $"正在断开客户端: {client.Address}");
             cts.Cancel();
             client.Dispose();
         }
         _clients.Clear();
-        Service.AddPluginLog(Id, "插件停用完成");
+        Host.AddPluginLog(Id, "插件停用完成");
         return Task.CompletedTask;
     }
 
@@ -118,7 +118,7 @@ public class SocketCommunicator : ICommunicator
         CommOptions options,
         CancellationToken ct)
     {
-        Service.AddPluginLog(Id, $"ExecuteTask 调用: slotIndex={slotIndex}, address={address}, action={action}, payload=[{payload}], isShared={options.IsShared}");
+        Host.AddPluginLog(Id, $"ExecuteTask 调用: slotIndex={slotIndex}, address={address}, action={action}, payload=[{payload}], isShared={options.IsShared}");
 
         try
         {
@@ -140,76 +140,76 @@ public class SocketCommunicator : ICommunicator
                     }
                         entry.client.TxTerminator = options.CommandTerminator ?? "\n";
                         entry.client.RxTerminator = options.ResponseTerminator ?? "\n";
-                        Service.AddPluginLog(Id, $"发送数据: address={address}, payload=[{payload}], TxTerminator=[{entry.client.TxTerminator}], RxTerminator=[{entry.client.RxTerminator}]");
+                        Host.AddPluginLog(Id, $"发送数据: address={address}, payload=[{payload}], TxTerminator=[{entry.client.TxTerminator}], RxTerminator=[{entry.client.RxTerminator}]");
                         await entry.client.SendAsync(payload);
-                        Service.AddPluginLog(Id, $"发送完成: address={address}");
+                        Host.AddPluginLog(Id, $"发送完成: address={address}");
                     }
                     else
                     {
-                        Service.AddPluginLog(Id, $"发送失败，客户端不存在: {address}");
+                        Host.AddPluginLog(Id, $"发送失败，客户端不存在: {address}");
                         throw new InvalidOperationException($"设备 [{address}] 未连接");
                     }
                     break;
                 case CommAction.Disconnect:
-                    Service.AddPluginLog(Id, $"断开连接请求: {address}");
+                    Host.AddPluginLog(Id, $"断开连接请求: {address}");
                     if (_clients.TryRemove(address, out var old))
                     {
-                        Service.AddPluginLog(Id, $"客户端已移除: {address}");
+                        Host.AddPluginLog(Id, $"客户端已移除: {address}");
                         old.cts.Cancel();
                         old.client.Dispose();
                         _channel?.NotifyState(address, DeviceState.Disconnected);
-                        Service.AddPluginLog(Id, $"通知断开状态: {address}");
+                        Host.AddPluginLog(Id, $"通知断开状态: {address}");
                     }
                     else
                     {
-                        Service.AddPluginLog(Id, $"断开失败，客户端不存在: {address}");
+                        Host.AddPluginLog(Id, $"断开失败，客户端不存在: {address}");
                     }
                     break;
                 case CommAction.Status:
                     var state = _clients.ContainsKey(address) ? DeviceState.Connected : DeviceState.Disconnected;
-                    Service.AddPluginLog(Id, $"状态查询: address={address}, state={state}");
+                    Host.AddPluginLog(Id, $"状态查询: address={address}, state={state}");
                     _channel?.NotifyState(address, state);
                     break;
             }
-            Service.AddPluginLog(Id, $"ExecuteTask 完成: action={action}, address={address}");
+            Host.AddPluginLog(Id, $"ExecuteTask 完成: action={action}, address={address}");
         }
         catch (Exception ex)
         {
-            Service.AddPluginLog(Id, $"ExecuteTask 异常: action={action}, address={address}, 异常={ex.Message}");
+            Host.AddPluginLog(Id, $"ExecuteTask 异常: action={action}, address={address}, 异常={ex.Message}");
             throw;
         }
     }
 
     private async Task HandleConnect(int slotIndex, string address, CommOptions options)
     {
-        Service.AddPluginLog(Id, $"HandleConnect 开始: slotIndex={slotIndex}, address={address}, isShared={options.IsShared}");
+        Host.AddPluginLog(Id, $"HandleConnect 开始: slotIndex={slotIndex}, address={address}, isShared={options.IsShared}");
 
         if (_clients.ContainsKey(address))
         {
-            Service.AddPluginLog(Id, $"客户端已存在，跳过连接: {address}");
+            Host.AddPluginLog(Id, $"客户端已存在，跳过连接: {address}");
             _channel?.NotifyState(address, DeviceState.Connected);
             return;
         }
 
         var client = new AsyncBaseClient(address);
 
-        Service.AddPluginLog(Id, $"创建新客户端: address={address}, TxTerminator=[{client.TxTerminator}], RxTerminator=[{client.RxTerminator}]");
+        Host.AddPluginLog(Id, $"创建新客户端: address={address}, TxTerminator=[{client.TxTerminator}], RxTerminator=[{client.RxTerminator}]");
 
-        Service.AddPluginLog(Id, $"正在连接: {address}");
+        Host.AddPluginLog(Id, $"正在连接: {address}");
         await client.ConnectAsync();
-        Service.AddPluginLog(Id, $"连接成功: {address}");
+        Host.AddPluginLog(Id, $"连接成功: {address}");
 
         var cts = new CancellationTokenSource();
         if (_clients.TryAdd(address, (client, cts)))
         {
-            Service.AddPluginLog(Id, $"客户端已添加到字典: {address}");
+            Host.AddPluginLog(Id, $"客户端已添加到字典: {address}");
             _channel?.NotifyState(address, DeviceState.Connected);
-            Service.AddPluginLog(Id, $"后台读取任务已启动: address={address}, entrySlot={slotIndex}, isShared={options.IsShared}");
+            Host.AddPluginLog(Id, $"后台读取任务已启动: address={address}, entrySlot={slotIndex}, isShared={options.IsShared}");
             _ = Task.Run(() => BackgroundReadLoop(slotIndex, address, client, options.IsShared, cts.Token));
         }
         else
         {
-            Service.AddPluginLog(Id, $"客户端添加失败（并发冲突）: {address}");
+            Host.AddPluginLog(Id, $"客户端添加失败（并发冲突）: {address}");
             cts.Dispose();
             client.Dispose();
         }
@@ -217,20 +217,20 @@ public class SocketCommunicator : ICommunicator
 
     private async Task BackgroundReadLoop(int entrySlot, string address, AsyncBaseClient client, bool isShared, CancellationToken token)
     {
-        Service.AddPluginLog(Id, $"BackgroundReadLoop 启动: address={address}, entrySlot={entrySlot}, isShared={isShared}");
+        Host.AddPluginLog(Id, $"BackgroundReadLoop 启动: address={address}, entrySlot={entrySlot}, isShared={isShared}");
 
         while (!token.IsCancellationRequested)
         {
             string msg;
             try
             {
-                Service.AddPluginLog(Id, $"等待接收数据: {address}");
+                Host.AddPluginLog(Id, $"等待接收数据: {address}");
                 msg = await client.ReceiveNextAsync();
-                Service.AddPluginLog(Id, $"收到消息: address={address}, raw=[{msg}]");
+                Host.AddPluginLog(Id, $"收到消息: address={address}, raw=[{msg}]");
             }
             catch (Exception ex)
             {
-                Service.AddPluginLog(Id, $"BackgroundReadLoop 异常退出: address={address}, 异常={ex.Message}");
+                Host.AddPluginLog(Id, $"BackgroundReadLoop 异常退出: address={address}, 异常={ex.Message}");
                 _clients.TryRemove(address, out _);
                 _channel?.NotifyState(address, DeviceState.Disconnected);
                 break;
@@ -238,7 +238,7 @@ public class SocketCommunicator : ICommunicator
 
             if (string.IsNullOrEmpty(msg))
             {
-                Service.AddPluginLog(Id, $"收到空消息，跳过: {address}");
+                Host.AddPluginLog(Id, $"收到空消息，跳过: {address}");
                 continue;
             }
 
@@ -253,33 +253,33 @@ public class SocketCommunicator : ICommunicator
                     var match = _slotRegex.Match(msg);
                     if (!match.Success || !int.TryParse(match.Value, out int slotNum))
                     {
-                        Service.AddPluginLog(Id, $"共享模式解析失败: address={address}, msg=[{msg}]");
+                        Host.AddPluginLog(Id, $"共享模式解析失败: address={address}, msg=[{msg}]");
                         continue;
                     }
                     targetSlot = slotNum - 1;
-                    Service.AddPluginLog(Id, $"共享模式路由: address={address}, msg=[{msg}], requestSlot={request.slotIndex}, parsedSlot={slotNum}, targetSlot={targetSlot}");
+                    Host.AddPluginLog(Id, $"共享模式路由: address={address}, msg=[{msg}], requestSlot={request.slotIndex}, parsedSlot={slotNum}, targetSlot={targetSlot}");
                 }
                 else
                 {
                     // 独享模式：直接使用发送请求时记录的 slotIndex
                     targetSlot = request.slotIndex;
-                    Service.AddPluginLog(Id, $"独享模式路由: address={address}, msg=[{msg}], targetSlot={targetSlot}");
+                    Host.AddPluginLog(Id, $"独享模式路由: address={address}, msg=[{msg}], targetSlot={targetSlot}");
                 }
             }
             else
             {
                 // 无匹配请求（设备主动推送或超时响应），使用连接时记录的 entrySlot
-                Service.AddPluginLog(Id, $"无匹配请求: address={address}, msg=[{msg}], 使用entrySlot={entrySlot}");
+                Host.AddPluginLog(Id, $"无匹配请求: address={address}, msg=[{msg}], 使用entrySlot={entrySlot}");
                 targetSlot = entrySlot;
             }
 
-            // 【重要】推送到 Service 时使用 <slotIndex, address> 格式。
-            // Service 通过 slotIndex 判定数据归属哪个槽位。
+            // 【重要】推送到 Host 时使用 <slotIndex, address> 格式。
+            // Host 通过 slotIndex 判定数据归属哪个槽位。
             // 共享设备时仅靠 address 无法区分槽位，必须使用 slotIndex。
-            Service.AddPluginLog(Id, $"推送事件: address={address}, targetSlot={targetSlot}, eventType=Data, msg=[{msg}]");
+            Host.AddPluginLog(Id, $"推送事件: address={address}, targetSlot={targetSlot}, eventType=Data, msg=[{msg}]");
             _channel?.ReportData(targetSlot, address, msg);
         }
 
-        Service.AddPluginLog(Id, $"BackgroundReadLoop 退出: address={address}, IsCancellationRequested={token.IsCancellationRequested}");
+        Host.AddPluginLog(Id, $"BackgroundReadLoop 退出: address={address}, IsCancellationRequested={token.IsCancellationRequested}");
     }
 }

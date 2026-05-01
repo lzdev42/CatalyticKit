@@ -26,26 +26,26 @@ public class CsvReporterPlugin : IProcessor
     public Task ActivateAsync(ICommChannel channel)
     {
         _channel = channel;
-       Service.AddPluginLog(pluginId:Id,"[CsvReporter] 插件已激活。");
+       Host.AddPluginLog(pluginId:Id,"[CsvReporter] 插件已激活。");
 
-        _outputDir = Service.ReportFolder();
+        _outputDir = Host.ReportFolder();
         Directory.CreateDirectory(_outputDir);
 
         try
         {
-            var flow = Service.GetFlowDefinition();
+            var flow = Host.GetFlowDefinition();
             _testItems = flow?.Steps.Where(s => s.IsTestItem).ToList();
 
             if (_testItems is { Count: > 0 })
-                Service.AddPluginLog(pluginId:Id,$"[CsvReporter] 已加载流程定义，共 {_testItems.Count} 个测试项。");
+                Host.AddPluginLog(pluginId:Id,$"[CsvReporter] 已加载流程定义，共 {_testItems.Count} 个测试项。");
 
             else
-                Service.AddPluginLog(pluginId:Id,"[CsvReporter] 流程定义为空，CSV 表头将在执行时动态生成。");
+                Host.AddPluginLog(pluginId:Id,"[CsvReporter] 流程定义为空，CSV 表头将在执行时动态生成。");
 
         }
-        catch (ServiceNotInitializedException)
+        catch (HostNotInitializedException)
         {
-            Service.AddPluginLog(pluginId:Id, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取。");
+            Host.AddPluginLog(pluginId:Id, "[CsvReporter] Service 尚未初始化，将在 ExecuteAsync 时延迟获取。");
         }
 
         return Task.CompletedTask;
@@ -53,7 +53,7 @@ public class CsvReporterPlugin : IProcessor
 
     public Task DeactivateAsync()
     {
-        Service.AddPluginLog(pluginId:Id, "[CsvReporter] 插件已停用。");
+        Host.AddPluginLog(pluginId:Id, "[CsvReporter] 插件已停用。");
         return Task.CompletedTask;
     }
 
@@ -63,15 +63,15 @@ public class CsvReporterPlugin : IProcessor
 
     public async Task ExecuteAsync(int slotIndex, CancellationToken ct)
     {
-        var slot = Service.Slot(slotIndex);
-        Service.AddPluginLog(Id,$"snsn {slot.GetSn() ?? "xx"}");
-        Service.AddPluginLog(pluginId:Id, $"[CsvReporter] 开始为 Slot {slotIndex} 生成横向 CSV 报告...");
+        var slot = Host.Slot(slotIndex);
+        Host.AddPluginLog(Id,$"snsn {slot.GetSn() ?? "xx"}");
+        Host.AddPluginLog(pluginId:Id, $"[CsvReporter] 开始为 Slot {slotIndex} 生成横向 CSV 报告...");
 
         try
         {
             if (_testItems == null)
             {
-                var flow = Service.GetFlowDefinition();
+                var flow = Host.GetFlowDefinition();
                 _testItems = flow?.Steps.Where(s => s.IsTestItem).ToList() ?? [];
             }
 
@@ -80,7 +80,7 @@ public class CsvReporterPlugin : IProcessor
             var history = slot.GetTestHistory();
             if (history == null)
             {
-                Service.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} 无测试历史，跳过写入。");
+                Host.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} 无测试历史，跳过写入。");
                 slot.ReportPass(); 
                 return;
             }
@@ -93,17 +93,17 @@ public class CsvReporterPlugin : IProcessor
             // 执行带锁的追加写入
             await AppendToCsvAsync(csvPath, history, ct);
 
-            Service.AddPluginLog(pluginId:Id, $"[CsvReporter] 数据已追加至宽表 CSV: {csvPath}");
+            Host.AddPluginLog(pluginId:Id, $"[CsvReporter] 数据已追加至宽表 CSV: {csvPath}");
             slot.ReportPass();
         }
         catch (OperationCanceledException)
         {
-            Service.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} CSV 写入被取消。");
+            Host.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} CSV 写入被取消。");
             throw; 
         }
         catch (Exception ex)
         {
-            Service.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} CSV 写入失败: {ex.Message}");
+            Host.AddPluginLog(pluginId:Id, $"[CsvReporter] Slot {slotIndex} CSV 写入失败: {ex.Message}");
             slot.ReportFail($"CSV 写入异常: {ex.Message}");
         }
     }
@@ -133,7 +133,7 @@ public class CsvReporterPlugin : IProcessor
         var lowerRow  = new List<string> { "下限值", "--" };
         
         var sn = EscapeCsv(history.Sn ?? "N/A");
-        Service.AddPluginLog(pluginId:Id,$"SN == {sn}");
+        Host.AddPluginLog(pluginId:Id,$"SN == {sn}");
         var dataRow = new List<string> { sn };
 
         bool isOverallPass = true; 

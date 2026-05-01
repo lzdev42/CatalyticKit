@@ -9,15 +9,9 @@ namespace CatalyticKit;
 /// - 事件触发：快照模式（锁内取委托快照，锁外执行，避免死锁）
 /// - 事件回调异常：try-catch 保护，防止插件回调异常影响 Host 稳定性
 /// </summary>
-internal class SlotProxy : ISlot, ISlotEventHandler
+internal class SlotProxy : ISlot
 {
     private readonly IHostBridge _bridge;
-    private readonly object _eventLock = new();
-
-    // 私有委托字段 (由 lock 锁保护)
-    private Action? _testStarted;
-    private Action<bool, string?>? _testFinished;
-    private Action<int, bool>? _stepFinished;
 
     public int Index { get; }
 
@@ -25,40 +19,25 @@ internal class SlotProxy : ISlot, ISlotEventHandler
     {
         Index = index;
         _bridge = bridge;
-        _bridge.SubscribeSlotEvents(index, this);
-    }
-
-    // --- 事件 (线程安全的 add/remove) ---
-
-    public event Action? TestStarted
-    {
-        add { lock (_eventLock) _testStarted += value; }
-        remove { lock (_eventLock) _testStarted -= value; }
-    }
-
-    public event Action<bool, string?>? TestFinished
-    {
-        add { lock (_eventLock) _testFinished += value; }
-        remove { lock (_eventLock) _testFinished -= value; }
-    }
-
-    public event Action<int, bool>? StepFinished
-    {
-        add { lock (_eventLock) _stepFinished += value; }
-        remove { lock (_eventLock) _stepFinished -= value; }
     }
 
     // --- 命令转发 ---
 
-    public void Start() => _bridge.SlotStart(Index);
+    public StartResult Start() => _bridge.SlotStart(Index);
 
-    public void Start(string sn)
+    public StartResult Start(string sn)
     {
         SetSn(sn);
-        Start();
+        return Start();
     }
 
     public void Stop() => _bridge.SlotStop(Index);
+
+    public void Reset()
+    {
+        _bridge.SlotReset(Index);
+        Host.NotifySlotReset(Index);
+    }
 
     public ISlot SetSn(string sn)
     {
@@ -83,45 +62,4 @@ internal class SlotProxy : ISlot, ISlotEventHandler
 
     public void Report(bool passed, string value, string? reason = null)
         => _bridge.ReportStepResultWithValue(Index, passed, value, reason);
-
-    // --- 事件分发 (由 Host 调用, 快照机制 + try-catch 保护) ---
-
-    public void OnTestStarted()
-    {
-        Action? handler;
-        lock (_eventLock) handler = _testStarted;
-        if (handler == null) return;
-        foreach (var d in handler.GetInvocationList())
-        {
-            try { ((Action)d)(); }
-            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
-        }
-    }
-
-    public void OnTestFinished(bool passed, string? errorMessage)
-    {
-        Action<bool, string?>? handler;
-        lock (_eventLock) handler = _testFinished;
-        if (handler != null)
-        {
-            foreach (var d in handler.GetInvocationList())
-            {
-                try { ((Action<bool, string?>)d)(passed, errorMessage); }
-                catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
-            }
-        }
-        Service.NotifySlotFinished(Index, passed, errorMessage);
-    }
-
-    public void OnStepFinished(int stepIndex, bool passed)
-    {
-        Action<int, bool>? handler;
-        lock (_eventLock) handler = _stepFinished;
-        if (handler == null) return;
-        foreach (var d in handler.GetInvocationList())
-        {
-            try { ((Action<int, bool>)d)(stepIndex, passed); }
-            catch (Exception ex) { _bridge.ReportPluginError($"slot-{Index}", ex); }
-        }
-    }
 }

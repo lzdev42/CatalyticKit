@@ -2,7 +2,7 @@ namespace CatalyticKit;
 
 /// <summary>
 /// 当前已加载的测试流程配置（静态配置，不依赖测试执行结果）。
-/// 通过 Service.GetFlow() 获取。
+/// 通过 Host.GetFlowDefinition() 获取。
 /// </summary>
 public record TestFlow
 {

@@ -16,17 +16,22 @@ public interface ISlot
     /// <summary>
     /// 开始测试 (非阻塞)
     /// </summary>
-    void Start();
+    StartResult Start();
 
     /// <summary>
     /// 设置 SN 并立即开始测试 (非阻塞)
     /// </summary>
-    void Start(string sn);
+    StartResult Start(string sn);
 
     /// <summary>
     /// 停止测试 (非阻塞)
     /// </summary>
     void Stop();
+
+    /// <summary>
+    /// 重置测试状态 (非阻塞)
+    /// </summary>
+    void Reset();
 
     /// <summary>
     /// 设置产品 SN
@@ -89,20 +94,4 @@ public interface ISlot
     void Report(bool passed, string value, string? reason = null);
 
     
-    // --- Events (Host -> 插件) ---
-
-    /// <summary>
-    /// 当测试开始时触发
-    /// </summary>
-    event Action? TestStarted;
-
-    /// <summary>
-    /// 当测试结束时触发 (passed, message)
-    /// </summary>
-    event Action<bool, string?>? TestFinished;
-
-    /// <summary>
-    /// 当单个步骤结束时触发 (stepIndex, passed)
-    /// </summary>
-    event Action<int, bool>? StepFinished;
 }

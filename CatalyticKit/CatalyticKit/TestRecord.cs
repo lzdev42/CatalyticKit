@@ -25,20 +25,17 @@ public record TestRecord
 public record StepRecord
 {
     /// <summary>
-    /// 步骤唯一 ID，对应低代码脚本中配置的 step_id。
-    /// 可用于与步骤定义（名称、配置）进行关联查询。
+    /// 步骤唯一 ID。
     /// </summary>
     public int StepId { get; init; }
 
     /// <summary>
-    /// 步骤名称，对应低代码脚本中配置的 step_name。
-    /// 例如："电压检测"、"初始化"。
+    /// 步骤名称。
     /// </summary>
     public string StepName { get; init; } = "";
 
     /// <summary>
-    /// 该步骤本次执行是否通过（综合检查规则的最终结果）。
-    /// 若步骤无检查规则，则执行成功即视为通过。
+    /// 是否通过。
     /// </summary>
     public bool Passed { get; init; }
 
@@ -100,7 +97,6 @@ public record StepRecord
 /// </summary>
 public abstract record CheckResult
 {
-    /// <summary>该步骤检查是否通过</summary>
     public abstract bool Passed { get; init; }
 
     /// <summary>
@@ -109,7 +105,6 @@ public abstract record CheckResult
     /// </summary>
     public record RangeCheck : CheckResult
     {
-        /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
         /// <summary>配置的下限值（含边界）</summary>
@@ -128,7 +123,6 @@ public abstract record CheckResult
     /// </summary>
     public record Threshold : CheckResult
     {
-        /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
         /// <summary>比较运算符</summary>
@@ -147,7 +141,6 @@ public abstract record CheckResult
     /// </summary>
     public record Contains : CheckResult
     {
-        /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
         /// <summary>配置的期望子串</summary>
@@ -163,7 +156,6 @@ public abstract record CheckResult
     /// </summary>
     public record Compare : CheckResult
     {
-        /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
         /// <summary>比较运算符</summary>
@@ -183,7 +175,6 @@ public abstract record CheckResult
     /// </summary>
     public record Unknown : CheckResult
     {
-        /// <summary>检查是否通过</summary>
         public override bool Passed { get; init; }
 
         /// <summary>

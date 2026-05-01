@@ -36,7 +36,7 @@ public class MyPlugin : ICommunicator
 
     public Task Execute(int slotIndex, string address, CommAction action, string payload, CommOptions options, CancellationToken ct)
     {
-        Service.AddPluginLog(Id, $"[Slot {slotIndex}] Executing {action} on {address}");
+        Host.AddPluginLog(Id, $"[Slot {slotIndex}] Executing {action} on {address}");
         // 你的通讯逻辑
         return Task.CompletedTask;
     }

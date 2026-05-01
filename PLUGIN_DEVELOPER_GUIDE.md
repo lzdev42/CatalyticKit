@@ -127,7 +127,7 @@ public class DemoPlugin : ICommunicator
     public async Task ActivateAsync(ICommChannel channel)
     {
         _channel = channel;
-        Service.AddPluginLog(Id, "插件已激活");
+        Host.AddPluginLog(Id, "插件已激活");
     }
 
     public Task DeactivateAsync() => Task.CompletedTask;
@@ -231,15 +231,17 @@ public interface ICommChannel
 }
 ```
 
-### 5.6 Service API
+### 5.6 Host API
 
 | 方法 | 说明 |
 |------|------|
-| `Service.Slot(0).Start()` | 启动测试 |
-| `Service.Slot(0).SubmitValue("3.31")` | 提交测量值（由引擎判决） |
-| `Service.Slot(0).Report(true, "3.31")` | 直接提报结果和测量值 |
-| `Service.Slot(0).GetCurrentStep()` | 获取当前步骤配置 (Step) |
-| `Service.GetFlowDefinition()` | 获取全量流程配置 (TestFlow) |
+| `Host.Slot(0).Start()` | 启动测试，返回 `StartResult` (Ok/Reason) |
+| `Host.Slot(0).SubmitValue("3.31")` | 提交测量值（由引擎判决） |
+| `Host.Slot(0).Report(true, "3.31")` | 直接提报结果和测量值 |
+| `Host.Slot(0).GetCurrentStep()` | 获取当前步骤配置 (Step) |
+| `Host.GetFlowDefinition()` | 获取全量流程配置 (TestFlow) |
+| `Host.NotifySlotFinished` | 全局静态事件，用于监听任一槽位完成 |
+| `Host.NotifySlotStarted` | 全局静态事件，用于监听任一槽位启动 |
 
 ---
 
@@ -278,8 +280,23 @@ public class SerialCommunicator : ICommunicator
 
 ---
 
-## 7. 错误处理最佳实践
+## 7. 错误处理与启动校验
 
+### 7.1 启动校验 (StartResult)
+调用 `Host.Slot(i).Start()` 现在返回一个 `StartResult` 结构。这允许插件或宿主在真正开始前拦截错误：
+- **越界校验**: Slot 索引是否合法。
+- **状态校验**: 该 Slot 是否已在运行。
+- **设备校验**: 绑定的硬件设备是否全部在线。
+
+```csharp
+var result = Host.Slot(0).Start();
+if (!result.Ok) {
+    Host.AddPluginLog(Id, $"启动失败: {result.Reason}");
+    return;
+}
+```
+
+### 7.2 运行时异常
 直接抛出标准 .NET 异常即可，Host 会捕获并将其上报给引擎和 UI。
 
 ---
@@ -291,12 +308,13 @@ public class SerialCommunicator : ICommunicator
 - **TestFlow / Step**: 流程与步骤的静态配置。
 - **TestRecord / StepRecord**: 测试执行的完整历史数据。
 - **CheckResult**: 包含实测值与判决详情的强类型模型。
+- **StartResult**: 用于同步反馈启动校验结果的模型。
 
 ---
 
 ## 9. 调试与排查问题
 
-建议使用 `Service.AddPluginLog` 记录调试信息，Host 会将其分流到独立的插件日志文件中。
+建议使用 `Host.AddPluginLog` 记录调试信息，Host 会将其分流到独立的插件日志文件中。
 
 ---
 

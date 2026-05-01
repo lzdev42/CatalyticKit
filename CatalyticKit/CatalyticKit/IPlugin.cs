@@ -1,9 +1,5 @@
 namespace CatalyticKit;
 
-/// <summary>
-/// 插件基础接口
-/// 所有插件必须实现此接口
-/// </summary>
 public interface IPlugin
 {
     /// <summary>

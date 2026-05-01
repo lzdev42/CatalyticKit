@@ -5,25 +5,12 @@ namespace CatalyticKit;
 /// </summary>
 public enum CheckOperator
 {
-    /// <summary>未知或未定义</summary>
     None,
-    
-    /// <summary>大于 (&gt;)</summary>
     GreaterThan,
-    
-    /// <summary>小于 (&lt;)</summary>
     LessThan,
-    
-    /// <summary>大于等于 (&gt;=)</summary>
     GreaterThanOrEqual,
-    
-    /// <summary>小于等于 (&lt;=)</summary>
     LessThanOrEqual,
-    
-    /// <summary>等于 (==)</summary>
     Equal,
-    
-    /// <summary>不等于 (!=)</summary>
     NotEqual
 }
 

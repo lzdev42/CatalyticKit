@@ -1,7 +1,6 @@
 namespace CatalyticKit;
 
 /// <summary>
-/// 步骤协调器接口（全局共享型插件，全局唯一）
 /// Engine 在每个步骤开始前调用 BeforeStepAsync，步骤结束后调用 AfterStepAsync。
 /// 
 /// 约定：

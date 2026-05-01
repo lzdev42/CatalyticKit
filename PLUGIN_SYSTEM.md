@@ -228,44 +228,42 @@ For `HostControlled` tasks (Extended mode), the system provides a **"Raw Conduit
 2. The `Params` field is **decoded from Base64** back into its original string.
 
 ### Plugin Layer (C#)
-1. The plugin calls `Service.Slot(x).GetCurrentStep().Params`.
+1. The plugin calls `Host.Slot(x).GetCurrentStep().Params`.
 2. It receives the **identical string** as entered in the UI.
 3. The plugin developer interprets the content (e.g., JSON parsing).
 
 ---
 
-## Service API
+## Host API
 
-Plugins can actively control the test flow via the static `Service` class:
-
-```csharp
 // Global commands
-Service.AddPluginLog(id, msg);   
-Service.StartAll();              
+Host.AddPluginLog(id, msg);   
+Host.StartAll();              
 
 // Per-slot commands
-Service.Slot(0).Start();         
-Service.Slot(0).Stop();          
-Service.Slot(0).SetSn("ABC");    
+Host.Slot(0).Start();         
+Host.Slot(0).Stop();          
+Host.Slot(0).SetSn("ABC");    
 
 // Reporting (For IProcessor plugins)
-Service.Slot(0).SubmitValue("3.31");                  // Submit value for Engine to judge
-Service.Slot(0).Report(true, "3.31", "Check OK");     // Direct report (pass/fail + value)
+Host.Slot(0).SubmitValue("3.31");                  // Submit value for Engine to judge
+Host.Slot(0).Report(true, "3.31", "Check OK");     // Direct report (pass/fail + value)
 
 // Get global flow information
-var flow = Service.GetFlowDefinition();   // Returns TestFlow object
-var folder = Service.ReportFolder();      
+var flow = Host.GetFlowDefinition();   // Returns TestFlow object
+var folder = Host.ReportFolder();      
 
 // Get current step info
-var step = Service.Slot(0).GetCurrentStep(); // Returns Step object (Id, Name, Params, etc.)
+var step = Host.Slot(0).GetCurrentStep(); // Returns Step object (Id, Name, Params, etc.)
 
 // Read variables
-var voltage = Service.Slot(0).GetVariable("voltage");  
+var voltage = Host.Slot(0).GetVariable("voltage");  
 
-// Get full test history
-Service.Slot(0).TestFinished += (passed, _) =>
+// Global event subscription
+Host.NotifySlotFinished += (args) =>
 {
-    var record = Service.Slot(0).GetTestHistory();  // Returns TestRecord? 
+    var slotIdx = args.SlotIndex;
+    var record = Host.Slot(slotIdx).GetTestHistory();  // Returns TestRecord? 
     // record.Steps contains StepRecord list with IsTestItem, CheckResult (strongly-typed), etc.
 };
 ```
@@ -292,9 +290,6 @@ public interface IHostBridge
     void ReportStepResult(int slotIndex, bool passed, string? failReason);
     void SubmitStepValue(int slotIndex, string value);
     void ReportStepResultWithValue(int slotIndex, bool passed, string value, string? reason);
-
-    void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
-    void UnsubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
 }
 ```
 
@@ -304,7 +299,6 @@ public interface IHostBridge
 
 | Component | Guarantee |
 |-----------|-----------|
-| `Service` static methods | Thread-safe |
-| `ISlot` event subscribe/unsubscribe | Thread-safe |
-| `ISlotEventHandler` invocation | Snapshot pattern |
+| `Host` static methods | Thread-safe |
+| `Host` event subscribe/unsubscribe | Thread-safe |
 | `IHostBridge` implementation | **Must be thread-safe** |

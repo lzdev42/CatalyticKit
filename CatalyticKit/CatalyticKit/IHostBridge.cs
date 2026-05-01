@@ -1,7 +1,7 @@
 namespace CatalyticKit;
 
 /// <summary>
-/// Host 必须实现此接口并通过 Service.SetBridge() 注入。
+/// Host 必须实现此接口并通过 Host.SetBridge() 注入。
 /// 所有方法必须是非阻塞的 (Fire-and-Forget)。
 /// 
 /// 线程安全约定：
@@ -32,17 +32,28 @@ public interface IHostBridge
     /// </summary>
     void StopAll();
 
+    /// <summary>
+    /// 重置所有 Slot 的状态 (非阻塞)
+    /// </summary>
+    void ResetAll();
+
     // --- Slot (槽位) 命令 (从插件到 Host) ---
 
     /// <summary>
-    /// 启动指定 Slot 的测试 (非阻塞)
+    /// 启动指定 Slot 的测试 (非阻塞)。
+    /// 返回启动结果：Ok=true 表示已接受请求；Ok=false 表示被拒绝，Reason 说明原因。
     /// </summary>
-    void SlotStart(int slotIndex);
+    StartResult SlotStart(int slotIndex);
 
     /// <summary>
     /// 停止指定 Slot 的测试 (非阻塞)
     /// </summary>
     void SlotStop(int slotIndex);
+
+    /// <summary>
+    /// 重置指定 Slot 的测试状态 (非阻塞)
+    /// </summary>
+    void SlotReset(int slotIndex);
 
     /// <summary>
     /// 设置指定 Slot 的产品 SN
@@ -111,18 +122,6 @@ public interface IHostBridge
     /// 登记当前 Slot 正在运行的 Host 类型任务 (用于生命周期关联和取消)
     /// </summary>
     void RegisterRunningHostTask(int slotIndex, ulong taskId);
-
-    // --- 事件订阅 ---
-
-    /// <summary>
-    /// 订阅指定 Slot 的事件 (Host 通过 handler 回调通知插件)
-    /// </summary>
-    void SubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
-
-    /// <summary>
-    /// 取消订阅指定 Slot 的事件
-    /// </summary>
-    void UnsubscribeSlotEvents(int slotIndex, ISlotEventHandler handler);
 
     // --- 错误提报 ---
 
