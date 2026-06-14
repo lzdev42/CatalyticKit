@@ -128,13 +128,15 @@ public class CsvReporterPlugin : IProcessor
                                          .ToList();
         }
 
-        var headerRow = new List<string> { "序列号(SN)", "测试结果" };
-        var upperRow  = new List<string> { "上限值", "--" };
-        var lowerRow  = new List<string> { "下限值", "--" };
+        var headerRow = new List<string> { "序列号(SN)", "批次号", "操作员", "测试结果" };
+        var upperRow  = new List<string> { "上限值", "--", "--", "--" };
+        var lowerRow  = new List<string> { "下限值", "--", "--", "--" };
         
         var sn = EscapeCsv(history.Sn ?? "N/A");
+        var batchNo = EscapeCsv(Host.TestInfo.BatchNumber);
+        var opName = EscapeCsv(Host.TestInfo.Operator);
         Host.AddPluginLog(pluginId:Id,$"SN == {sn}");
-        var dataRow = new List<string> { sn };
+        var dataRow = new List<string> { sn, batchNo, opName };
 
         bool isOverallPass = true; 
 
@@ -190,7 +192,7 @@ public class CsvReporterPlugin : IProcessor
             dataRow.Add(measured);
         }
 
-        dataRow.Insert(1, isOverallPass ? "PASS" : "FAIL");
+        dataRow.Insert(3, isOverallPass ? "PASS" : "FAIL");
 
         // 2. 加锁进行文件 IO 操作
         await _fileWriteLock.WaitAsync(ct);

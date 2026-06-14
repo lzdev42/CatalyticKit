@@ -17,6 +17,11 @@ public static class Host
     private static readonly object _eventLock = new();
     private static Action<TestFinishedEventArgs>? _slotFinished;
     private static Action<int>? _slotStarted;
+    /// <summary>
+    /// 获取当前全局的测试会话信息（如操作员、批次号）
+    /// 插件可以通过 Host.TestInfo.Operator 等读取最新值。
+    /// </summary>
+    public static TestInfoContext TestInfo { get; } = new();
 
     /// <summary>
     /// [Internal] 设置底层 Bridge 实现
@@ -205,6 +210,29 @@ public static class Host
             try { ((Action<int>)d)(slotIndex); }
             catch (Exception ex) { _bridge?.ReportPluginError("host-event", ex); }
         }
+    }
+}
+
+/// <summary>
+/// 全局测试会话信息，包含由 UI 传递下来的操作员、批次号等临时数据。
+/// </summary>
+public class TestInfoContext
+{
+    private string _operatorName = "";
+    private string _batchNumber = "";
+    
+    /// <summary>操作员</summary>
+    public string Operator
+    {
+        get => _operatorName;
+        set => _operatorName = value ?? "";
+    }
+    
+    /// <summary>批次号</summary>
+    public string BatchNumber
+    {
+        get => _batchNumber;
+        set => _batchNumber = value ?? "";
     }
 }
 
