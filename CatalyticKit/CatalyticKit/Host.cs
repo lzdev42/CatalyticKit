@@ -219,7 +219,7 @@ public static class Host
 public class TestInfoContext
 {
     private string _operatorName = "";
-    private string _batchNumber = "";
+    private string _build = "";
     
     /// <summary>操作员</summary>
     public string Operator
@@ -228,11 +228,11 @@ public class TestInfoContext
         set => _operatorName = value ?? "";
     }
     
-    /// <summary>批次号</summary>
-    public string BatchNumber
+    /// <summary>Build</summary>
+    public string Build
     {
-        get => _batchNumber;
-        set => _batchNumber = value ?? "";
+        get => _build;
+        set => _build = value ?? "";
     }
 }
 

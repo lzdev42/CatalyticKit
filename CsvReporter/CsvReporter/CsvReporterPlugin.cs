@@ -128,15 +128,15 @@ public class CsvReporterPlugin : IProcessor
                                          .ToList();
         }
 
-        var headerRow = new List<string> { "序列号(SN)", "批次号", "操作员", "测试结果" };
+        var headerRow = new List<string> { "序列号(SN)", "Build", "操作员", "测试结果" };
         var upperRow  = new List<string> { "上限值", "--", "--", "--" };
         var lowerRow  = new List<string> { "下限值", "--", "--", "--" };
         
         var sn = EscapeCsv(history.Sn ?? "N/A");
-        var batchNo = EscapeCsv(Host.TestInfo.BatchNumber);
+        var buildStr = EscapeCsv(Host.TestInfo.Build);
         var opName = EscapeCsv(Host.TestInfo.Operator);
         Host.AddPluginLog(pluginId:Id,$"SN == {sn}");
-        var dataRow = new List<string> { sn, batchNo, opName };
+        var dataRow = new List<string> { sn, buildStr, opName };
 
         bool isOverallPass = true; 
 
