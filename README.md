@@ -82,8 +82,8 @@ public class MyPlugin : ICommunicator
 
 ## 文档
 
-- [插件系统设计](PLUGIN_SYSTEM.md) - 架构概览
-- [插件开发指南](PLUGIN_DEVELOPER_GUIDE.md) - 完整开发教程
+- [插件开发指南](PLUGIN_DEVELOPER_GUIDE.md) — 接口参考、项目搭建、部署流程
+- [插件运行机制](PLUGIN_SYSTEM.md) — 通信模型、slotIndex 归属契约、请求队列机制
 
 ## 目录结构与示例
 
@@ -92,9 +92,10 @@ public class MyPlugin : ICommunicator
 | 目录/示例 | 类型 | 说明 |
 |-----------|------|------|
 | [CatalyticKit/](CatalyticKit/) | **核心** | SDK 源码 |
-| [SocketClient/](SocketClient/) | 通讯 | TCP/IP 客户端通讯插件 |
-| [CsvReporter/](CsvReporter/) | 报告 | 将测试结果导出为 CSV 格式 |
-| [RemoteController/](RemoteController/) | 控制 | 远程控制接口实现 |
+| [SocketClient/](SocketClient/) | 通讯器 | TCP 客户端，支持多槽位并发与请求队列路由 |
+| [CatalyticSerialPort/](CatalyticSerialPort/) | 通讯器 | 串口通讯，支持终止符模式 |
+| [CsvReporter/](CsvReporter/) | 处理器 | 将测试结果导出为 CSV 格式 |
+| [RemoteController/](RemoteController/) | 协调器 | 远程压测控制器，演示事件订阅与槽位启动 |
 
 ## 构建
 
